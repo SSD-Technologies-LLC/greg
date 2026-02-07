@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     redis_password: str = ""
 
     # Tuning
-    greg_response_threshold: float = 0.4
-    greg_random_factor: float = 0.07
+    greg_response_threshold: float = 0.25
+    greg_random_factor: float = 0.15
     greg_cooldown_messages: int = 3
     greg_max_unprompted_per_hour: int = 5
     greg_max_api_calls_per_hour: int = 60
