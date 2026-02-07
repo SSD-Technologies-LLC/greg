@@ -16,6 +16,7 @@ from src.brain.decision import DecisionEngine
 from src.brain.emotions import EmotionTracker
 from src.brain.responder import Responder
 from src.brain.searcher import WebSearcher
+from src.brain.transcriber import VoiceTranscriber
 from src.memory.context_builder import ContextBuilder
 from src.memory.distiller import Distiller
 from src.memory.long_term import LongTermMemory
@@ -70,6 +71,21 @@ async def main() -> None:
     emotion_tracker = EmotionTracker(ltm=ltm, anthropic_client=anthropic_client)
     responder = Responder(anthropic_client=anthropic_client)
 
+    # Voice transcription — optional, only if OPENAI_API_KEY is set
+    transcriber: VoiceTranscriber
+    if settings.openai_api_key:
+        try:
+            from openai import AsyncOpenAI  # type: ignore[attr-defined]
+
+            transcriber = VoiceTranscriber(client=AsyncOpenAI(api_key=settings.openai_api_key))
+            logger.info("Voice transcription enabled (Whisper)")
+        except ImportError:
+            logger.warning("openai package not installed, voice transcription disabled")
+            transcriber = VoiceTranscriber(client=None)
+    else:
+        logger.info("OPENAI_API_KEY not set, voice transcription disabled")
+        transcriber = VoiceTranscriber(client=None)
+
     # Web search — optional, only if TAVILY_API_KEY is set
     searcher = None
     if settings.tavily_api_key:
@@ -100,6 +116,7 @@ async def main() -> None:
         stm=stm,
         distiller=distiller,
         searcher=searcher,
+        transcriber=transcriber,
     )
 
     @router.message()

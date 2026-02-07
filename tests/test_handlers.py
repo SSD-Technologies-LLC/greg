@@ -8,6 +8,7 @@ import pytest
 
 from src.bot.handlers import MessageHandler
 from src.brain.decision import DecisionResult
+from src.brain.transcriber import VoiceTranscriber
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -130,12 +131,15 @@ def deps():
     searcher = MagicMock()
     searcher.search = MagicMock(return_value=None)
 
-    return sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher
+    transcriber = AsyncMock(spec=VoiceTranscriber)
+    transcriber.transcribe = AsyncMock(return_value=None)
+
+    return sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher, transcriber
 
 
 @pytest.fixture
 def handler(deps):
-    sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher = deps
+    sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher, transcriber = deps
     return MessageHandler(
         sender=sender,
         decision_engine=decision,
@@ -145,6 +149,7 @@ def handler(deps):
         stm=stm,
         distiller=distiller,
         searcher=searcher,
+        transcriber=transcriber,
     )
 
 
@@ -182,7 +187,7 @@ class TestGuardClauses:
 class TestTextMessages:
     @pytest.mark.asyncio
     async def test_plain_text_stores_and_responds(self, handler, deps):
-        sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher = deps
+        sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher, _ = deps
         msg = _make_message(text="Привет всем")
         await handler.handle_message(msg)
 
@@ -251,7 +256,7 @@ class TestTextMessages:
 class TestPhotoMessages:
     @pytest.mark.asyncio
     async def test_photo_with_caption(self, handler, deps):
-        sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher = deps
+        sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher, _ = deps
         msg = _make_message(caption="Смотрите что нашёл", photo=_make_photo())
         await handler.handle_message(msg)
 
@@ -268,7 +273,7 @@ class TestPhotoMessages:
 
     @pytest.mark.asyncio
     async def test_photo_without_caption(self, handler, deps):
-        _, _, _, _, _, stm, _, _ = deps
+        _, _, _, _, _, stm, _, _, _ = deps
         msg = _make_message(photo=_make_photo())
         await handler.handle_message(msg)
 
@@ -293,7 +298,7 @@ class TestPhotoMessages:
 class TestVideoMessages:
     @pytest.mark.asyncio
     async def test_video_with_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _, _ = deps
+        _, _, responder, _, _, stm, _, _, _ = deps
         msg = _make_message(caption="Классное видео", video=_make_video())
         await handler.handle_message(msg)
 
@@ -305,7 +310,7 @@ class TestVideoMessages:
 
     @pytest.mark.asyncio
     async def test_video_without_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _, _ = deps
+        _, _, responder, _, _, stm, _, _, _ = deps
         msg = _make_message(video=_make_video(with_thumbnail=False))
         await handler.handle_message(msg)
 
@@ -324,7 +329,7 @@ class TestVideoMessages:
 class TestVideoNoteMessages:
     @pytest.mark.asyncio
     async def test_video_note_with_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _, _ = deps
+        _, _, responder, _, _, stm, _, _, _ = deps
         msg = _make_message(video_note=_make_video_note())
         await handler.handle_message(msg)
 
@@ -336,7 +341,7 @@ class TestVideoNoteMessages:
 
     @pytest.mark.asyncio
     async def test_video_note_without_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _, _ = deps
+        _, _, responder, _, _, stm, _, _, _ = deps
         msg = _make_message(video_note=_make_video_note(with_thumbnail=False))
         await handler.handle_message(msg)
 
@@ -354,17 +359,47 @@ class TestVideoNoteMessages:
 
 class TestVoiceMessages:
     @pytest.mark.asyncio
-    async def test_voice_message(self, handler, deps):
-        _, _, responder, _, _, stm, _, _ = deps
+    async def test_voice_without_transcription(self, handler, deps):
+        _, _, responder, _, _, stm, _, _, transcriber = deps
+        transcriber.transcribe = AsyncMock(return_value=None)
         msg = _make_message(voice=_make_voice())
         await handler.handle_message(msg)
 
         store_call = stm.store_message.call_args_list[0]
         assert store_call[0][3] == "[Голосовое сообщение]"
 
-        # No image for voice
         resp_call = responder.generate_response.call_args
         assert resp_call.kwargs["image_base64"] is None
+
+    @pytest.mark.asyncio
+    async def test_voice_with_transcription(self, handler, deps):
+        _, _, _, _, _, stm, _, _, transcriber = deps
+        transcriber.transcribe = AsyncMock(return_value="Привет, как дела?")
+        msg = _make_message(voice=_make_voice())
+        await handler.handle_message(msg)
+
+        store_call = stm.store_message.call_args_list[0]
+        assert store_call[0][3] == "[Голосовое сообщение] Привет, как дела?"
+
+    @pytest.mark.asyncio
+    async def test_voice_no_transcriber(self, deps):
+        sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher, _ = deps
+        handler = MessageHandler(
+            sender=sender,
+            decision_engine=decision,
+            responder=responder,
+            emotion_tracker=emotions,
+            context_builder=ctx_builder,
+            stm=stm,
+            distiller=distiller,
+            searcher=searcher,
+            transcriber=None,
+        )
+        msg = _make_message(voice=_make_voice())
+        await handler.handle_message(msg)
+
+        store_call = stm.store_message.call_args_list[0]
+        assert store_call[0][3] == "[Голосовое сообщение]"
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +410,7 @@ class TestVoiceMessages:
 class TestDownloadFailure:
     @pytest.mark.asyncio
     async def test_photo_download_failure_still_processes(self, handler, deps):
-        _, _, responder, _, _, stm, _, _ = deps
+        _, _, responder, _, _, stm, _, _, _ = deps
         msg = _make_message(caption="Look!", photo=_make_photo())
         msg.bot.download = AsyncMock(side_effect=Exception("Network error"))
         await handler.handle_message(msg)
@@ -397,7 +432,7 @@ class TestDownloadFailure:
 class TestDistillation:
     @pytest.mark.asyncio
     async def test_distillation_triggered_on_overflow(self, handler, deps):
-        _, _, _, _, _, stm, distiller, _ = deps
+        _, _, _, _, _, stm, distiller, _, _ = deps
         stm.store_message = AsyncMock(return_value=250)  # > buffer_size (200)
         msg = _make_message(text="one more message")
 
@@ -421,7 +456,7 @@ class TestDistillation:
 class TestResponseStorage:
     @pytest.mark.asyncio
     async def test_gregs_response_stored_in_stm(self, handler, deps):
-        sender, _, responder, _, _, stm, _, _ = deps
+        sender, _, responder, _, _, stm, _, _, _ = deps
         responder.generate_response = AsyncMock(return_value="Ответ Грега")
         msg = _make_message(text="hey")
 
@@ -442,7 +477,7 @@ class TestResponseStorage:
 
     @pytest.mark.asyncio
     async def test_response_separator_stripped(self, handler, deps):
-        _, _, responder, _, _, stm, _, _ = deps
+        _, _, responder, _, _, stm, _, _, _ = deps
         responder.generate_response = AsyncMock(return_value="Часть 1\n---\nЧасть 2")
         msg = _make_message(text="hey")
 
@@ -468,7 +503,7 @@ class TestResponseStorage:
 class TestSearchIntegration:
     @pytest.mark.asyncio
     async def test_search_triggered_when_needed(self, handler, deps):
-        sender, decision, responder, _, _, _, _, searcher = deps
+        sender, decision, responder, _, _, _, _, searcher, _ = deps
         decision.evaluate = AsyncMock(
             return_value=DecisionResult(
                 should_respond=True,
@@ -492,7 +527,7 @@ class TestSearchIntegration:
 
     @pytest.mark.asyncio
     async def test_no_search_when_not_needed(self, handler, deps):
-        _, _, _, _, _, _, _, searcher = deps
+        _, _, _, _, _, _, _, searcher, _ = deps
         msg = _make_message(text="hey")
         await handler.handle_message(msg)
         searcher.search.assert_not_called()

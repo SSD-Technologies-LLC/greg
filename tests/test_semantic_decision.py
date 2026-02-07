@@ -90,14 +90,18 @@ class TestDirectTriggers:
 
 
 class TestSemanticEvaluation:
+    """Semantic evaluation tests — patched to daytime to avoid night gate."""
+
     @pytest.mark.asyncio
     async def test_haiku_says_respond(self, engine, mock_client):
-        result = await engine.evaluate(
-            chat_id=1,
-            text="what do you guys think about the new iPhone?",
-            is_reply_to_bot=False,
-            recent_messages=[{"username": "alice", "text": "hi", "user_id": 1}],
-        )
+        with patch("src.brain.decision.datetime") as mock_dt:
+            mock_dt.now.return_value = MagicMock(hour=12)
+            result = await engine.evaluate(
+                chat_id=1,
+                text="what do you guys think about the new iPhone?",
+                is_reply_to_bot=False,
+                recent_messages=[{"username": "alice", "text": "hi", "user_id": 1}],
+            )
         assert result.should_respond is True
         assert result.is_direct is False
         mock_client.messages.create.assert_called_once()
@@ -119,12 +123,14 @@ class TestSemanticEvaluation:
         ]
         mock_client.messages.create = AsyncMock(return_value=response)
 
-        result = await engine.evaluate(
-            chat_id=1,
-            text="ok",
-            is_reply_to_bot=False,
-            recent_messages=[],
-        )
+        with patch("src.brain.decision.datetime") as mock_dt:
+            mock_dt.now.return_value = MagicMock(hour=12)
+            result = await engine.evaluate(
+                chat_id=1,
+                text="ok",
+                is_reply_to_bot=False,
+                recent_messages=[],
+            )
         assert result.should_respond is False
 
     @pytest.mark.asyncio
@@ -144,24 +150,28 @@ class TestSemanticEvaluation:
         ]
         mock_client.messages.create = AsyncMock(return_value=response)
 
-        result = await engine.evaluate(
-            chat_id=1,
-            text="what's Bitcoin at right now?",
-            is_reply_to_bot=False,
-            recent_messages=[],
-        )
+        with patch("src.brain.decision.datetime") as mock_dt:
+            mock_dt.now.return_value = MagicMock(hour=12)
+            result = await engine.evaluate(
+                chat_id=1,
+                text="what's Bitcoin at right now?",
+                is_reply_to_bot=False,
+                recent_messages=[],
+            )
         assert result.search_needed is True
         assert result.search_query == "Bitcoin price today"
 
     @pytest.mark.asyncio
     async def test_api_failure_defaults_to_no_response(self, engine, mock_client):
         mock_client.messages.create = AsyncMock(side_effect=Exception("API down"))
-        result = await engine.evaluate(
-            chat_id=1,
-            text="hello",
-            is_reply_to_bot=False,
-            recent_messages=[],
-        )
+        with patch("src.brain.decision.datetime") as mock_dt:
+            mock_dt.now.return_value = MagicMock(hour=12)
+            result = await engine.evaluate(
+                chat_id=1,
+                text="hello",
+                is_reply_to_bot=False,
+                recent_messages=[],
+            )
         assert result.should_respond is False
 
     @pytest.mark.asyncio
@@ -169,12 +179,14 @@ class TestSemanticEvaluation:
         response = AsyncMock()
         response.content = [AsyncMock(text="not json at all")]
         mock_client.messages.create = AsyncMock(return_value=response)
-        result = await engine.evaluate(
-            chat_id=1,
-            text="hello",
-            is_reply_to_bot=False,
-            recent_messages=[],
-        )
+        with patch("src.brain.decision.datetime") as mock_dt:
+            mock_dt.now.return_value = MagicMock(hour=12)
+            result = await engine.evaluate(
+                chat_id=1,
+                text="hello",
+                is_reply_to_bot=False,
+                recent_messages=[],
+            )
         assert result.should_respond is False
 
 

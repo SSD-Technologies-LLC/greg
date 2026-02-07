@@ -12,6 +12,7 @@ from src.brain.decision import DecisionEngine
 from src.brain.emotions import EmotionTracker
 from src.brain.responder import Responder
 from src.brain.searcher import WebSearcher
+from src.brain.transcriber import VoiceTranscriber
 from src.memory.context_builder import ContextBuilder
 from src.memory.distiller import Distiller
 from src.memory.short_term import ShortTermMemory
@@ -32,6 +33,7 @@ class MessageHandler:
         stm: ShortTermMemory,
         distiller: Distiller,
         searcher: WebSearcher | None = None,
+        transcriber: VoiceTranscriber | None = None,
     ) -> None:
         self._sender = sender
         self._decision = decision_engine
@@ -41,6 +43,7 @@ class MessageHandler:
         self._stm = stm
         self._distiller = distiller
         self._searcher = searcher
+        self._transcriber = transcriber
 
     async def handle_message(self, message: Message) -> None:
         if not message.from_user:
@@ -137,11 +140,32 @@ class MessageHandler:
                 image_base64 = await self._download_image(message, message.video_note.thumbnail.file_id)
         elif message.voice:
             label = "[Голосовое сообщение]"
+            transcription = await self._transcribe_voice(message, message.voice.file_id)
+            if transcription:
+                display_text = f"{label} {transcription}"
+                if caption:
+                    display_text = f"{label} {caption} — {transcription}"
+                return display_text, None
         else:
             return caption, None
 
         display_text = f"{label} {caption}".strip() if caption else label
         return display_text, image_base64
+
+    async def _transcribe_voice(self, message: Message, file_id: str) -> str | None:
+        if not self._transcriber:
+            return None
+        try:
+            buf = BytesIO()
+            assert message.bot is not None
+            await message.bot.download(file_id, destination=buf)
+            audio_data = buf.getvalue()
+            if not audio_data:
+                return None
+            return await self._transcriber.transcribe(audio_data)
+        except Exception:
+            logger.exception("Failed to download voice %s", file_id)
+            return None
 
     async def _download_image(self, message: Message, file_id: str) -> str | None:
         try:

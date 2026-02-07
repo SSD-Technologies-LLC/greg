@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     greg_response_model: str = "claude-opus-4-6"
     greg_decision_model: str = "claude-haiku-4-5-20251001"
 
+    # Voice transcription (OpenAI Whisper)
+    openai_api_key: str | None = None
+
     # Search
     tavily_api_key: str | None = None
     tavily_max_results: int = 3
