@@ -66,12 +66,16 @@ class Distiller:
                     return data
                 logger.warning(
                     "Distillation attempt %d/%d returned unparseable JSON for chat %d",
-                    attempt + 1, MAX_RETRIES, chat_id,
+                    attempt + 1,
+                    MAX_RETRIES,
+                    chat_id,
                 )
             except Exception:
                 logger.exception(
                     "Distillation attempt %d/%d failed for chat %d",
-                    attempt + 1, MAX_RETRIES, chat_id,
+                    attempt + 1,
+                    MAX_RETRIES,
+                    chat_id,
                 )
         return None
 
@@ -82,9 +86,7 @@ class Distiller:
 
         logger.info("Distilling %d messages for chat %d", len(overflow), chat_id)
 
-        messages_text = "\n".join(
-            f"[{m['username']}({m['user_id']})]: {m['text']}" for m in overflow
-        )
+        messages_text = "\n".join(f"[{m['username']}({m['user_id']})]: {m['text']}" for m in overflow)
 
         data = await self._call_with_retry(messages_text, chat_id)
         if data is None:
@@ -99,14 +101,10 @@ class Distiller:
 
             if facts:
                 await self._ltm.update_facts(uid, chat_id, facts)
-                await self._ltm.append_memory_log(
-                    chat_id, uid, "fact", json.dumps(facts, ensure_ascii=False)
-                )
+                await self._ltm.append_memory_log(chat_id, uid, "fact", json.dumps(facts, ensure_ascii=False))
             if traits:
                 await self._ltm.update_personality_traits(uid, chat_id, traits)
-                await self._ltm.append_memory_log(
-                    chat_id, uid, "insight", json.dumps(traits, ensure_ascii=False)
-                )
+                await self._ltm.append_memory_log(chat_id, uid, "insight", json.dumps(traits, ensure_ascii=False))
 
         group = data.get("group", {})
         if group.get("inside_jokes") or group.get("recurring_topics"):

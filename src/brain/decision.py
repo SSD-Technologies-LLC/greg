@@ -84,29 +84,26 @@ class DecisionEngine:
         if not is_direct:
             self._unprompted_log[chat_id].append(time.time())
 
-    async def _semantic_evaluate(
-        self, chat_id: int, recent_messages: list[dict]
-    ) -> DecisionResult:
+    async def _semantic_evaluate(self, chat_id: int, recent_messages: list[dict]) -> DecisionResult:
         last_spoke = self._last_response.get(chat_id, 0)
         seconds_ago = int(time.time() - last_spoke) if last_spoke else 9999
 
-        formatted = "\n".join(
-            f"[{m.get('username', '?')}]: {m.get('text', '')}"
-            for m in recent_messages[-10:]
-        )
+        formatted = "\n".join(f"[{m.get('username', '?')}]: {m.get('text', '')}" for m in recent_messages[-10:])
 
         try:
             response = await self._client.messages.create(
                 model=settings.greg_decision_model,
                 max_tokens=128,
                 system="Output only valid JSON.",
-                messages=[{
-                    "role": "user",
-                    "content": DECISION_PROMPT.format(
-                        recent_messages=formatted or "(пусто)",
-                        seconds_ago=seconds_ago,
-                    ),
-                }],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": DECISION_PROMPT.format(
+                            recent_messages=formatted or "(пусто)",
+                            seconds_ago=seconds_ago,
+                        ),
+                    }
+                ],
             )
             raw = response.content[0].text
             data = safe_parse_json(raw)
@@ -131,7 +128,5 @@ class DecisionEngine:
     def _check_rate_limit(self, chat_id: int) -> bool:
         now = time.time()
         hour_ago = now - 3600
-        self._unprompted_log[chat_id] = [
-            t for t in self._unprompted_log[chat_id] if t > hour_ago
-        ]
+        self._unprompted_log[chat_id] = [t for t in self._unprompted_log[chat_id] if t > hour_ago]
         return len(self._unprompted_log[chat_id]) < self._max_unprompted

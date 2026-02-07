@@ -1,12 +1,9 @@
 """Tests for safe JSON parsing utility."""
 
-import pytest
-
 from src.utils.json_parser import safe_parse_json
 
 
 class TestSafeParseJson:
-
     def test_valid_json(self):
         result = safe_parse_json('{"key": "value"}')
         assert result == {"key": "value"}

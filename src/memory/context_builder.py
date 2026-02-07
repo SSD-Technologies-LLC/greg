@@ -11,9 +11,7 @@ class ContextBuilder:
         self._stm = stm
         self._ltm = ltm
 
-    async def build_context(
-        self, chat_id: int, user_id: int, display_name: str
-    ) -> dict:
+    async def build_context(self, chat_id: int, user_id: int, display_name: str) -> dict:
         recent_messages = await self._stm.get_recent_messages(chat_id, count=50)
         profile = await self._ltm.get_or_create_profile(user_id, chat_id, display_name)
         group_ctx = await self._ltm.get_group_context(chat_id)

@@ -38,9 +38,7 @@ EMOTION_PROMPT = """Ты оцениваешь эмоциональное вза�
 
 
 class EmotionTracker:
-    def __init__(
-        self, ltm: LongTermMemory, anthropic_client: AsyncAnthropic
-    ) -> None:
+    def __init__(self, ltm: LongTermMemory, anthropic_client: AsyncAnthropic) -> None:
         self._ltm = ltm
         self._client = anthropic_client
 
@@ -94,7 +92,10 @@ class EmotionTracker:
 
         logger.info(
             "Emotion update for user %d in chat %d: %s (%s)",
-            user_id, chat_id, deltas, reasoning,
+            user_id,
+            chat_id,
+            deltas,
+            reasoning,
         )
         return new_state
 

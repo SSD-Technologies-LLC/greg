@@ -29,14 +29,17 @@ def ltm(mock_pool):
 # Profile management
 # ---------------------------------------------------------------------------
 
-class TestProfileManagement:
 
+class TestProfileManagement:
     @pytest.mark.asyncio
     async def test_get_existing_profile(self, ltm, mock_pool):
         _, conn = mock_pool
         row = {
-            "user_id": 1, "chat_id": 10, "display_name": "Alice",
-            "facts": {"job": "dev"}, "personality_traits": {},
+            "user_id": 1,
+            "chat_id": 10,
+            "display_name": "Alice",
+            "facts": {"job": "dev"},
+            "personality_traits": {},
             "emotional_state": DEFAULT_EMOTIONS.copy(),
         }
         conn.fetchrow = AsyncMock(return_value=row)
@@ -48,8 +51,11 @@ class TestProfileManagement:
     async def test_create_new_profile(self, ltm, mock_pool):
         _, conn = mock_pool
         new_row = {
-            "user_id": 1, "chat_id": 10, "display_name": "Alice",
-            "facts": {}, "personality_traits": {},
+            "user_id": 1,
+            "chat_id": 10,
+            "display_name": "Alice",
+            "facts": {},
+            "personality_traits": {},
             "emotional_state": DEFAULT_EMOTIONS.copy(),
         }
         # First fetchrow returns None (not found), then returns the created row
@@ -79,8 +85,8 @@ class TestProfileManagement:
 # Facts and traits
 # ---------------------------------------------------------------------------
 
-class TestFactsAndTraits:
 
+class TestFactsAndTraits:
     @pytest.mark.asyncio
     async def test_update_facts(self, ltm, mock_pool):
         _, conn = mock_pool
@@ -105,14 +111,12 @@ class TestFactsAndTraits:
 # Emotional state
 # ---------------------------------------------------------------------------
 
-class TestEmotionalState:
 
+class TestEmotionalState:
     @pytest.mark.asyncio
     async def test_update_emotional_state(self, ltm, mock_pool):
         _, conn = mock_pool
-        conn.fetchrow = AsyncMock(return_value={
-            "emotional_state": DEFAULT_EMOTIONS.copy()
-        })
+        conn.fetchrow = AsyncMock(return_value={"emotional_state": DEFAULT_EMOTIONS.copy()})
         conn.execute = AsyncMock()
 
         result = await ltm.update_emotional_state(1, 10, {"warmth": 0.1, "trust": 0.05})
@@ -152,10 +156,18 @@ class TestEmotionalState:
     @pytest.mark.asyncio
     async def test_get_emotional_state(self, ltm, mock_pool):
         _, conn = mock_pool
-        conn.fetchrow = AsyncMock(return_value={
-            "emotional_state": {"warmth": 0.5, "trust": 0.1, "respect": 0.0,
-                                "annoyance": 0.0, "interest": 0.0, "loyalty": 0.0}
-        })
+        conn.fetchrow = AsyncMock(
+            return_value={
+                "emotional_state": {
+                    "warmth": 0.5,
+                    "trust": 0.1,
+                    "respect": 0.0,
+                    "annoyance": 0.0,
+                    "interest": 0.0,
+                    "loyalty": 0.0,
+                }
+            }
+        )
         result = await ltm.get_emotional_state(1, 10)
         assert result["warmth"] == 0.5
 
@@ -179,9 +191,7 @@ class TestEmotionalState:
     @pytest.mark.asyncio
     async def test_unknown_delta_key_ignored(self, ltm, mock_pool):
         _, conn = mock_pool
-        conn.fetchrow = AsyncMock(return_value={
-            "emotional_state": DEFAULT_EMOTIONS.copy()
-        })
+        conn.fetchrow = AsyncMock(return_value={"emotional_state": DEFAULT_EMOTIONS.copy()})
         conn.execute = AsyncMock()
         result = await ltm.update_emotional_state(1, 10, {"unknown_key": 0.5})
         # unknown_key should not appear, only known emotions remain
@@ -192,8 +202,8 @@ class TestEmotionalState:
 # Group context
 # ---------------------------------------------------------------------------
 
-class TestGroupContext:
 
+class TestGroupContext:
     @pytest.mark.asyncio
     async def test_get_existing_group(self, ltm, mock_pool):
         _, conn = mock_pool
@@ -224,8 +234,8 @@ class TestGroupContext:
 # Memory log
 # ---------------------------------------------------------------------------
 
-class TestMemoryLog:
 
+class TestMemoryLog:
     @pytest.mark.asyncio
     async def test_append_memory_log(self, ltm, mock_pool):
         _, conn = mock_pool
@@ -266,8 +276,8 @@ class TestMemoryLog:
 # Annoyance decay
 # ---------------------------------------------------------------------------
 
-class TestAnnoyanceDecay:
 
+class TestAnnoyanceDecay:
     @pytest.mark.asyncio
     async def test_decay_annoyance(self, ltm, mock_pool):
         _, conn = mock_pool

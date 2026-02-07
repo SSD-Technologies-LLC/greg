@@ -21,7 +21,6 @@ def builder(mock_deps):
 
 
 class TestBuildContext:
-
     @pytest.mark.asyncio
     async def test_returns_all_required_keys(self, builder, mock_deps):
         stm, ltm = mock_deps
@@ -41,19 +40,23 @@ class TestBuildContext:
     @pytest.mark.asyncio
     async def test_collects_other_profiles(self, builder, mock_deps):
         stm, ltm = mock_deps
-        stm.get_recent_messages = AsyncMock(return_value=[
-            {"user_id": 1, "username": "alice", "text": "hi"},
-            {"user_id": 2, "username": "bob", "text": "hello"},
-            {"user_id": 3, "username": "carol", "text": "hey"},
-        ])
+        stm.get_recent_messages = AsyncMock(
+            return_value=[
+                {"user_id": 1, "username": "alice", "text": "hi"},
+                {"user_id": 2, "username": "bob", "text": "hello"},
+                {"user_id": 3, "username": "carol", "text": "hey"},
+            ]
+        )
         ltm.get_or_create_profile = AsyncMock(return_value={"user_id": 1})
         ltm.get_group_context = AsyncMock(return_value={})
         ltm.get_recent_memories = AsyncMock(return_value=[])
-        ltm.get_profile = AsyncMock(return_value={
-            "display_name": "Other",
-            "facts": {},
-            "emotional_state": {"warmth": 0.1},
-        })
+        ltm.get_profile = AsyncMock(
+            return_value={
+                "display_name": "Other",
+                "facts": {},
+                "emotional_state": {"warmth": 0.1},
+            }
+        )
 
         result = await builder.build_context(chat_id=10, user_id=1, display_name="Alice")
 
@@ -66,10 +69,12 @@ class TestBuildContext:
     @pytest.mark.asyncio
     async def test_missing_other_profile_excluded(self, builder, mock_deps):
         stm, ltm = mock_deps
-        stm.get_recent_messages = AsyncMock(return_value=[
-            {"user_id": 1, "username": "alice", "text": "hi"},
-            {"user_id": 2, "username": "bob", "text": "hello"},
-        ])
+        stm.get_recent_messages = AsyncMock(
+            return_value=[
+                {"user_id": 1, "username": "alice", "text": "hi"},
+                {"user_id": 2, "username": "bob", "text": "hello"},
+            ]
+        )
         ltm.get_or_create_profile = AsyncMock(return_value={"user_id": 1})
         ltm.get_group_context = AsyncMock(return_value={})
         ltm.get_recent_memories = AsyncMock(return_value=[])
@@ -87,11 +92,13 @@ class TestBuildContext:
         ltm.get_or_create_profile = AsyncMock(return_value={"user_id": 999})
         ltm.get_group_context = AsyncMock(return_value={})
         ltm.get_recent_memories = AsyncMock(return_value=[])
-        ltm.get_profile = AsyncMock(return_value={
-            "display_name": "Other",
-            "facts": {},
-            "emotional_state": {},
-        })
+        ltm.get_profile = AsyncMock(
+            return_value={
+                "display_name": "Other",
+                "facts": {},
+                "emotional_state": {},
+            }
+        )
 
         result = await builder.build_context(chat_id=10, user_id=999, display_name="me")
         assert len(result["other_profiles"]) <= 10

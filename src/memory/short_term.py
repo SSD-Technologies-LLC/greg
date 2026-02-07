@@ -18,9 +18,7 @@ class ShortTermMemory:
     def _state_key(self, chat_id: int) -> str:
         return f"chat:{chat_id}:state"
 
-    async def store_message(
-        self, chat_id: int, user_id: int, username: str, text: str
-    ) -> int:
+    async def store_message(self, chat_id: int, user_id: int, username: str, text: str) -> int:
         msg = json.dumps(
             {
                 "user_id": user_id,

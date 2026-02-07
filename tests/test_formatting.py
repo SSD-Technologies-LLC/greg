@@ -4,12 +4,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.brain.responder import sanitize_response
 from src.bot.sender import MessageSender
+from src.brain.responder import sanitize_response
 
 
 class TestSanitizeResponse:
-
     def test_strips_literal_separator(self):
         text = "Part 1\\n---\\nPart 2"
         result = sanitize_response(text)
@@ -61,7 +60,6 @@ class TestSanitizeResponse:
 
 
 class TestSenderRobustSplit:
-
     @pytest.mark.asyncio
     async def test_split_on_dashes_with_spaces(self):
         bot = AsyncMock()

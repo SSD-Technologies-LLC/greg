@@ -30,7 +30,7 @@ def safe_parse_json(raw: str) -> dict | None:
     end = raw.rfind("}")
     if start != -1 and end > start:
         try:
-            return json.loads(raw[start:end + 1])
+            return json.loads(raw[start : end + 1])
         except (json.JSONDecodeError, ValueError):
             pass
 

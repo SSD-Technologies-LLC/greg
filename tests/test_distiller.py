@@ -1,5 +1,5 @@
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -39,13 +39,19 @@ async def test_distill_extracts_and_stores(distiller, mock_deps):
     stm.trim_overflow = AsyncMock()
 
     api_response = AsyncMock()
-    api_response.content = [AsyncMock(text=json.dumps({
-        "users": {
-            "1": {"facts": {"job": "Google"}, "personality_insights": {"ambitious": 0.8}},
-            "2": {"facts": {}, "personality_insights": {"humor_style": "self-deprecating"}},
-        },
-        "group": {"inside_jokes": [], "recurring_topics": ["work"]},
-    }))]
+    api_response.content = [
+        AsyncMock(
+            text=json.dumps(
+                {
+                    "users": {
+                        "1": {"facts": {"job": "Google"}, "personality_insights": {"ambitious": 0.8}},
+                        "2": {"facts": {}, "personality_insights": {"humor_style": "self-deprecating"}},
+                    },
+                    "group": {"inside_jokes": [], "recurring_topics": ["work"]},
+                }
+            )
+        )
+    ]
     client.messages.create = AsyncMock(return_value=api_response)
 
     result = await distiller.distill(chat_id=123)
@@ -67,10 +73,16 @@ async def test_distill_retries_on_json_failure(distiller, mock_deps):
     bad_response.content = [AsyncMock(text="")]
 
     good_response = AsyncMock()
-    good_response.content = [AsyncMock(text=json.dumps({
-        "users": {},
-        "group": {"inside_jokes": [], "recurring_topics": []},
-    }))]
+    good_response.content = [
+        AsyncMock(
+            text=json.dumps(
+                {
+                    "users": {},
+                    "group": {"inside_jokes": [], "recurring_topics": []},
+                }
+            )
+        )
+    ]
 
     client.messages.create = AsyncMock(side_effect=[bad_response, good_response])
 
@@ -109,9 +121,16 @@ async def test_distill_uses_decision_model(distiller, mock_deps):
     stm.trim_overflow = AsyncMock()
 
     api_response = AsyncMock()
-    api_response.content = [AsyncMock(text=json.dumps({
-        "users": {}, "group": {},
-    }))]
+    api_response.content = [
+        AsyncMock(
+            text=json.dumps(
+                {
+                    "users": {},
+                    "group": {},
+                }
+            )
+        )
+    ]
     client.messages.create = AsyncMock(return_value=api_response)
 
     await distiller.distill(chat_id=123)

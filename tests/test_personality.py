@@ -12,7 +12,6 @@ def engine():
 
 
 class TestBasePersonality:
-
     def test_personality_mentions_greg(self):
         assert "Грег" in BASE_PERSONALITY
 
@@ -33,12 +32,11 @@ class TestBasePersonality:
         assert "---" in BASE_PERSONALITY
 
     def test_personality_is_russian(self):
-        cyrillic = sum(1 for c in BASE_PERSONALITY if '\u0400' <= c <= '\u04ff')
+        cyrillic = sum(1 for c in BASE_PERSONALITY if "\u0400" <= c <= "\u04ff")
         assert cyrillic > 50
 
 
 class TestToneModifiers:
-
     def test_annoyance_high_exists(self):
         assert "annoyance_high" in TONE_MODIFIERS
 
@@ -50,19 +48,26 @@ class TestToneModifiers:
 
     def test_all_modifiers_are_russian(self):
         for key, value in TONE_MODIFIERS.items():
-            cyrillic = sum(1 for c in value if '\u0400' <= c <= '\u04ff')
+            cyrillic = sum(1 for c in value if "\u0400" <= c <= "\u04ff")
             assert cyrillic > 5, f"Modifier {key} should be in Russian"
 
     def test_original_modifiers_preserved(self):
-        expected = ["warmth_high", "warmth_low", "trust_high", "trust_low",
-                    "annoyance_high", "respect_high", "respect_low",
-                    "interest_high", "loyalty_high"]
+        expected = [
+            "warmth_high",
+            "warmth_low",
+            "trust_high",
+            "trust_low",
+            "annoyance_high",
+            "respect_high",
+            "respect_low",
+            "interest_high",
+            "loyalty_high",
+        ]
         for key in expected:
             assert key in TONE_MODIFIERS
 
 
 class TestBuildSystemPrompt:
-
     def test_includes_base_personality(self, engine):
         ctx = {"user_profile": {"emotional_state": {}}, "group_context": {}}
         prompt = engine.build_system_prompt(ctx)
@@ -102,7 +107,6 @@ class TestBuildSystemPrompt:
 
 
 class TestBuildMessages:
-
     def test_empty_context_adds_current(self, engine):
         ctx = {"recent_messages": []}
         msgs = engine.build_messages(ctx, "hello", "alice")
@@ -123,15 +127,18 @@ class TestBuildMessages:
 
 
 class TestToneModifierLogic:
-
     def test_neutral_returns_empty(self, engine):
         modifiers = engine._get_tone_modifiers({})
         assert modifiers == []
 
     def test_all_high(self, engine):
         emotions = {
-            "warmth": 0.8, "trust": 0.8, "annoyance": 0.6,
-            "respect": 0.8, "interest": 0.8, "loyalty": 0.8,
+            "warmth": 0.8,
+            "trust": 0.8,
+            "annoyance": 0.6,
+            "respect": 0.8,
+            "interest": 0.8,
+            "loyalty": 0.8,
         }
         modifiers = engine._get_tone_modifiers(emotions)
         assert TONE_MODIFIERS["warmth_high"] in modifiers

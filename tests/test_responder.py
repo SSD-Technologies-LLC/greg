@@ -1,7 +1,6 @@
 """Tests for Responder — Claude API integration and response generation."""
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -35,7 +34,6 @@ def _context():
 
 
 class TestGenerateResponse:
-
     @pytest.mark.asyncio
     async def test_basic_response(self, responder, mock_client):
         result = await responder.generate_response(_context(), "hello", "alice")
@@ -58,9 +56,7 @@ class TestGenerateResponse:
 
     @pytest.mark.asyncio
     async def test_image_forwarded_to_messages(self, responder, mock_client):
-        await responder.generate_response(
-            _context(), "[Фото] look", "alice", image_base64="AAAA"
-        )
+        await responder.generate_response(_context(), "[Фото] look", "alice", image_base64="AAAA")
         call_kwargs = mock_client.messages.create.call_args.kwargs
         messages = call_kwargs["messages"]
         # Last message should have multimodal content

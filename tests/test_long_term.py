@@ -1,4 +1,3 @@
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -6,8 +5,12 @@ import pytest
 from src.memory.long_term import LongTermMemory
 
 DEFAULT_EMOTIONS = {
-    "warmth": 0.0, "trust": 0.0, "respect": 0.0,
-    "annoyance": 0.0, "interest": 0.0, "loyalty": 0.0,
+    "warmth": 0.0,
+    "trust": 0.0,
+    "respect": 0.0,
+    "annoyance": 0.0,
+    "interest": 0.0,
+    "loyalty": 0.0,
 }
 
 
@@ -33,8 +36,14 @@ def ltm(mock_pool):
 @pytest.mark.asyncio
 async def test_get_or_create_profile_existing(ltm, mock_pool):
     _, conn = mock_pool
-    row = {"user_id": 1, "chat_id": 10, "display_name": "Alice",
-           "facts": {}, "personality_traits": {}, "emotional_state": DEFAULT_EMOTIONS}
+    row = {
+        "user_id": 1,
+        "chat_id": 10,
+        "display_name": "Alice",
+        "facts": {},
+        "personality_traits": {},
+        "emotional_state": DEFAULT_EMOTIONS,
+    }
     conn.fetchrow = AsyncMock(return_value=row)
     result = await ltm.get_or_create_profile(user_id=1, chat_id=10, display_name="Alice")
     assert result["display_name"] == "Alice"

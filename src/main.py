@@ -75,6 +75,7 @@ async def main() -> None:
     if settings.tavily_api_key:
         try:
             from tavily import TavilyClient
+
             searcher = WebSearcher(tavily_client=TavilyClient(api_key=settings.tavily_api_key))
             logger.info("Tavily search enabled")
         except ImportError:

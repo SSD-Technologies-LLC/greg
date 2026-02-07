@@ -68,8 +68,12 @@ class PersonalityEngine:
         return "\n".join(parts)
 
     def build_messages(
-        self, context: dict, current_text: str, current_username: str,
-        *, image_base64: str | None = None,
+        self,
+        context: dict,
+        current_text: str,
+        current_username: str,
+        *,
+        image_base64: str | None = None,
     ) -> list[dict]:
         messages = []
         recent = context.get("recent_messages", [])
@@ -79,34 +83,40 @@ class PersonalityEngine:
             text = msg.get("text", "")
             if not text:
                 continue
-            messages.append({
-                "role": "user",
-                "content": f"[{username}]: {text}",
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"[{username}]: {text}",
+                }
+            )
 
         text_content = f"[{current_username}]: {current_text}"
 
         if not messages or not messages[-1]["content"].startswith(f"[{current_username}]"):
             if image_base64:
-                messages.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": image_base64,
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_base64,
+                                },
                             },
-                        },
-                        {"type": "text", "text": text_content},
-                    ],
-                })
+                            {"type": "text", "text": text_content},
+                        ],
+                    }
+                )
             else:
-                messages.append({
-                    "role": "user",
-                    "content": text_content,
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": text_content,
+                    }
+                )
         elif image_base64:
             # Last message already matches current user — replace with multimodal
             messages[-1] = {

@@ -45,7 +45,9 @@ class MessageHandler:
     async def handle_message(self, message: Message) -> None:
         if not message.from_user:
             return
-        if not (message.text or message.caption or message.photo or message.video or message.voice or message.video_note):
+        if not (
+            message.text or message.caption or message.photo or message.video or message.voice or message.video_note
+        ):
             return
 
         chat_id = message.chat.id
@@ -95,13 +97,13 @@ class MessageHandler:
         # Web search if needed (run in thread to avoid blocking event loop)
         search_context = None
         if search_needed and search_query and self._searcher:
-            search_context = await asyncio.to_thread(
-                self._searcher.search, search_query, settings.tavily_max_results
-            )
+            search_context = await asyncio.to_thread(self._searcher.search, search_query, settings.tavily_max_results)
 
         context = await self._context.build_context(chat_id, user_id, username)
         response = await self._responder.generate_response(
-            context, display_text, username,
+            context,
+            display_text,
+            username,
             image_base64=image_base64,
             search_context=search_context,
         )
@@ -112,15 +114,11 @@ class MessageHandler:
         reply_to = message.message_id if is_direct else None
         await self._sender.send_response(chat_id, response, reply_to=reply_to)
 
-        await self._stm.store_message(
-            chat_id, 0, settings.greg_bot_username, response.replace("\n---\n", " ")
-        )
+        await self._stm.store_message(chat_id, 0, settings.greg_bot_username, response.replace("\n---\n", " "))
 
         self._decision.record_response(chat_id, is_direct)
 
-        asyncio.create_task(
-            self._safe_emotion_update(chat_id, user_id, username, display_text, response)
-        )
+        asyncio.create_task(self._safe_emotion_update(chat_id, user_id, username, display_text, response))
 
     async def _extract_media(self, message: Message) -> tuple[str, str | None]:
         caption = message.text or message.caption or ""
@@ -160,12 +158,8 @@ class MessageHandler:
         except Exception:
             logger.exception("Background distillation failed for chat %d", chat_id)
 
-    async def _safe_emotion_update(
-        self, chat_id: int, user_id: int, username: str, text: str, response: str
-    ) -> None:
+    async def _safe_emotion_update(self, chat_id: int, user_id: int, username: str, text: str, response: str) -> None:
         try:
-            await self._emotions.evaluate_interaction(
-                chat_id, user_id, username, text, response
-            )
+            await self._emotions.evaluate_interaction(chat_id, user_id, username, text, response)
         except Exception:
             logger.exception("Background emotion update failed for user %d", user_id)
