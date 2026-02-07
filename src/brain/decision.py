@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config.topics import HOT_TAKES, INTERESTS, SENTIMENT_KEYWORDS
+from config.topics import GREG_NAMES, HOT_TAKES, INTERESTS, SENTIMENT_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,8 @@ class DecisionEngine:
         self._night_end = night_end
         self._tz = ZoneInfo(timezone)
         self._unprompted_log: dict[int, list[float]] = defaultdict(list)
+        self._active_convos: dict[int, float] = {}
+        self._active_window = 120
 
     async def calculate_score(
         self,
@@ -43,6 +45,8 @@ class DecisionEngine:
 
         if is_reply_to_bot or f"@{self._bot_username}" in text_lower or self._bot_username in text_lower:
             return 1.0
+        if any(name in text_lower for name in GREG_NAMES):
+            return 1.0
 
         score = 0.0
         score += self._score_topics(text_lower)
@@ -50,7 +54,12 @@ class DecisionEngine:
         score += self._score_momentum(recent_messages)
         score += self._newcomer_boost(recent_messages)
         score += random.uniform(0, self._random_factor)
-        score -= self._cooldown_penalty(recent_messages)
+
+        active_boost = self._active_conversation_boost(chat_id)
+        score += active_boost
+        if active_boost == 0:
+            score -= self._cooldown_penalty(recent_messages)
+
         score -= self._night_penalty()
 
         logger.debug("Score for chat %d: %.2f", chat_id, max(0.0, score))
@@ -68,8 +77,15 @@ class DecisionEngine:
         return True
 
     def record_response(self, chat_id: int, is_direct: bool) -> None:
+        self._active_convos[chat_id] = time.time()
         if not is_direct:
             self._unprompted_log[chat_id].append(time.time())
+
+    def _active_conversation_boost(self, chat_id: int) -> float:
+        last_response = self._active_convos.get(chat_id, 0)
+        if time.time() - last_response < self._active_window:
+            return 0.4
+        return 0.0
 
     def _score_topics(self, text: str) -> float:
         for topic in HOT_TAKES:
