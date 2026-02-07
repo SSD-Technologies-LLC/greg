@@ -1,143 +1,132 @@
 import logging
-import random
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config.topics import GREG_NAMES, HOT_TAKES, INTERESTS, SENTIMENT_KEYWORDS
+from anthropic import AsyncAnthropic
+
+from config.settings import settings
+from config.topics import GREG_NAMES
+from src.utils.json_parser import safe_parse_json
 
 logger = logging.getLogger(__name__)
+
+DECISION_PROMPT = """Ты — фильтр внимания Грега. Грег — острый на язык, с мнением по любому поводу друг в групповом чате.
+Он вступает в разговор когда: тема интересная, кто-то сказал чушь, есть шутка которую можно вставить, кто-то задал вопрос на который он знает ответ, или настроение разговора требует его присутствия.
+Он молчит когда: скучный смолтолк, люди общаются между собой и ему нечего добавить, или он только что говорил и нового сказать нечего.
+
+Последние сообщения:
+{recent_messages}
+
+Грег последний раз говорил: {seconds_ago}с назад
+
+Ответь ТОЛЬКО валидным JSON: {{"respond": bool, "reason": "одна строка", "search_needed": bool, "search_query": "запрос или null"}}"""
+
+
+@dataclass
+class DecisionResult:
+    should_respond: bool
+    is_direct: bool
+    search_needed: bool = False
+    search_query: str | None = None
 
 
 class DecisionEngine:
     def __init__(
         self,
         bot_username: str,
-        response_threshold: float = 0.4,
-        random_factor: float = 0.07,
-        cooldown_messages: int = 3,
+        anthropic_client: AsyncAnthropic,
         max_unprompted_per_hour: int = 5,
         night_start: int = 1,
         night_end: int = 8,
         timezone: str = "Europe/Moscow",
     ) -> None:
         self._bot_username = bot_username.lower()
-        self._threshold = response_threshold
-        self._random_factor = random_factor
-        self._cooldown_messages = cooldown_messages
+        self._client = anthropic_client
         self._max_unprompted = max_unprompted_per_hour
         self._night_start = night_start
         self._night_end = night_end
         self._tz = ZoneInfo(timezone)
         self._unprompted_log: dict[int, list[float]] = defaultdict(list)
-        self._active_convos: dict[int, float] = {}
-        self._active_window = 120
+        self._last_response: dict[int, float] = {}
 
-    async def calculate_score(
+    async def evaluate(
         self,
         chat_id: int,
         text: str,
         is_reply_to_bot: bool,
         recent_messages: list[dict],
-    ) -> float:
+    ) -> DecisionResult:
         text_lower = text.lower()
 
+        # Direct triggers — no API call needed
         if is_reply_to_bot or f"@{self._bot_username}" in text_lower or self._bot_username in text_lower:
-            return 1.0
+            return DecisionResult(should_respond=True, is_direct=True)
         if any(name in text_lower for name in GREG_NAMES):
-            return 1.0
+            return DecisionResult(should_respond=True, is_direct=True)
 
-        score = 0.0
-        score += self._score_topics(text_lower)
-        score += self._score_sentiment(text_lower)
-        score += self._score_momentum(recent_messages)
-        score += self._newcomer_boost(recent_messages)
-        score += random.uniform(0, self._random_factor)
+        # Night mode gate — skip API call
+        if self._is_night():
+            return DecisionResult(should_respond=False, is_direct=False)
 
-        active_boost = self._active_conversation_boost(chat_id)
-        score += active_boost
-        if active_boost == 0:
-            score -= self._cooldown_penalty(recent_messages)
-
-        score -= self._night_penalty()
-
-        logger.debug("Score for chat %d: %.2f", chat_id, max(0.0, score))
-
-        return max(0.0, score)
-
-    def should_respond(self, score: float, chat_id: int, is_direct: bool) -> bool:
-        if is_direct:
-            return True
-        if score < self._threshold:
-            return False
+        # Rate limit gate — skip API call
         if not self._check_rate_limit(chat_id):
             logger.info("Rate limit hit for chat %d", chat_id)
-            return False
-        return True
+            return DecisionResult(should_respond=False, is_direct=False)
+
+        # Semantic evaluation via Haiku
+        return await self._semantic_evaluate(chat_id, recent_messages)
 
     def record_response(self, chat_id: int, is_direct: bool) -> None:
-        self._active_convos[chat_id] = time.time()
+        self._last_response[chat_id] = time.time()
         if not is_direct:
             self._unprompted_log[chat_id].append(time.time())
 
-    def _active_conversation_boost(self, chat_id: int) -> float:
-        last_response = self._active_convos.get(chat_id, 0)
-        if time.time() - last_response < self._active_window:
-            return 0.4
-        return 0.0
+    async def _semantic_evaluate(
+        self, chat_id: int, recent_messages: list[dict]
+    ) -> DecisionResult:
+        last_spoke = self._last_response.get(chat_id, 0)
+        seconds_ago = int(time.time() - last_spoke) if last_spoke else 9999
 
-    def _score_topics(self, text: str) -> float:
-        for topic in HOT_TAKES:
-            if topic in text:
-                return 0.5
-        for topic in INTERESTS:
-            if topic in text:
-                return 0.3
-        return 0.0
-
-    def _score_sentiment(self, text: str) -> float:
-        for category, keywords in SENTIMENT_KEYWORDS.items():
-            for kw in keywords:
-                if kw in text:
-                    if category in ("vulnerable", "positive_strong"):
-                        return 0.6
-                    if category in ("negative_strong", "conflict"):
-                        return 0.5
-                    return 0.2
-        return 0.0
-
-    def _score_momentum(self, recent_messages: list[dict]) -> float:
-        if len(recent_messages) < 10:
-            return 0.0
-        bot_in_recent = any(
-            m.get("username", "").lower() == self._bot_username
+        formatted = "\n".join(
+            f"[{m.get('username', '?')}]: {m.get('text', '')}"
             for m in recent_messages[-10:]
         )
-        if not bot_in_recent:
-            return 0.2
-        return 0.0
 
-    def _newcomer_boost(self, recent_messages: list[dict]) -> float:
-        """Boost score when Greg is new to a chat (few messages in buffer)."""
-        if len(recent_messages) < 20:
-            return 0.5
-        return 0.0
+        try:
+            response = await self._client.messages.create(
+                model=settings.greg_decision_model,
+                max_tokens=128,
+                system="Output only valid JSON.",
+                messages=[{
+                    "role": "user",
+                    "content": DECISION_PROMPT.format(
+                        recent_messages=formatted or "(пусто)",
+                        seconds_ago=seconds_ago,
+                    ),
+                }],
+            )
+            raw = response.content[0].text
+            data = safe_parse_json(raw)
+            if data is None:
+                logger.warning("Invalid JSON from decision model for chat %d", chat_id)
+                return DecisionResult(should_respond=False, is_direct=False)
 
-    def _cooldown_penalty(self, recent_messages: list[dict]) -> float:
-        if not recent_messages:
-            return 0.0
-        last_n = recent_messages[-self._cooldown_messages:]
-        bot_spoke = any(
-            m.get("username", "").lower() == self._bot_username for m in last_n
-        )
-        return 0.3 if bot_spoke else 0.0
+            return DecisionResult(
+                should_respond=data.get("respond", False),
+                is_direct=False,
+                search_needed=data.get("search_needed", False),
+                search_query=data.get("search_query"),
+            )
+        except Exception:
+            logger.exception("Semantic decision failed for chat %d", chat_id)
+            return DecisionResult(should_respond=False, is_direct=False)
 
-    def _night_penalty(self) -> float:
+    def _is_night(self) -> bool:
         now = datetime.now(self._tz)
-        if self._night_start <= now.hour < self._night_end:
-            return 0.2
-        return 0.0
+        return self._night_start <= now.hour < self._night_end
 
     def _check_rate_limit(self, chat_id: int) -> bool:
         now = time.time()
