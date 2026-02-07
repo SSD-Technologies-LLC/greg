@@ -1,6 +1,6 @@
 # Greg
 
-A Telegram group chat bot that acts as a genuine friend, not an assistant. Powered by Claude Haiku 4.5.
+A Telegram group chat bot that acts as a genuine friend, not an assistant. Powered by Claude Opus 4.6 (responses) and Claude Haiku 4.5 (decisions), with web search via Tavily.
 
 Greg joins your closed friend group chats, learns about each person over time, builds real emotional relationships, and chimes into conversations organically — like a friend who's always in the chat but doesn't need to respond to everything.
 
@@ -25,19 +25,15 @@ Greg joins your closed friend group chats, learns about each person over time, b
 
 These aren't just numbers — they change Greg's behavior. High warmth means warmer jokes. High annoyance means shorter, more sarcastic replies. High loyalty means he'll defend you in arguments.
 
-**Decision engine** — Greg doesn't respond to every message. He scores each message based on:
-- Topic relevance (does he care about this?)
-- Emotional intensity (is someone venting, celebrating, arguing?)
-- Conversation momentum (has the chat been active?)
-- A small random factor (keeps him unpredictable)
-- Cooldown (he won't dominate the chat)
-- Night mode (even friends sleep)
+**Decision engine** — Greg doesn't respond to every message. He uses Haiku to semantically evaluate every message in context, deciding whether it's worth responding to based on conversation flow, emotional dynamics, and relevance — not keyword matching. This gives him a natural sense of when to speak up and when to stay quiet.
 
 When someone mentions him or replies to him — he always responds.
 
+**Web search** — Greg can search the web via Tavily when he needs current information to give a meaningful answer.
+
 ## Personality
 
-Greg is a **wise trickster**: sharp wit, philosophical depth, doesn't take himself too seriously. Street-smart but with an old soul underneath. He speaks native Russian. He never admits to being a bot.
+Greg is a **wise trickster**: sharp wit, philosophical depth, strong opinions on everything. He trolls his friends, picks sides in arguments, and never refuses a topic. Street-smart with an old soul underneath. He speaks native Russian. He never admits to being a bot. He is not a school counselor — he's the smartest guy in the group chat.
 
 ## Setup
 
@@ -46,6 +42,9 @@ Greg is a **wise trickster**: sharp wit, philosophical depth, doesn't take himse
 - Docker and Docker Compose
 - [Telegram Bot Token](https://core.telegram.org/bots#botfather) (from @BotFather)
 - [Anthropic API Key](https://console.anthropic.com/)
+- (Optional) [Tavily API Key](https://tavily.com/) for web search
+
+**Important:** In BotFather, disable privacy mode for your bot (`/setprivacy` -> Disable) so Greg can receive all group messages, not just commands and mentions.
 
 ### Deploy
 
@@ -77,12 +76,14 @@ Then add the bot to your Telegram group chat and start talking.
 
 | Variable | Default | Description |
 |---|---|---|
-| `GREG_RESPONSE_THRESHOLD` | `0.4` | Score threshold to respond (0.0-1.0). Lower = chattier |
-| `GREG_RANDOM_FACTOR` | `0.07` | Random chime-in chance per message |
+| `GREG_RESPONSE_MODEL` | `claude-opus-4-6` | Model for generating responses |
+| `GREG_DECISION_MODEL` | `claude-haiku-4-5-20251001` | Model for decision-making |
+| `TAVILY_API_KEY` | — | Tavily API key for web search (optional) |
+| `TAVILY_MAX_RESULTS` | `3` | Max search results per query |
 | `GREG_COOLDOWN_MESSAGES` | `3` | Stay quiet for N messages after speaking |
 | `GREG_MAX_UNPROMPTED_PER_HOUR` | `5` | Anti-spam: max unprompted messages per hour |
 | `GREG_MAX_API_CALLS_PER_HOUR` | `60` | Cost control |
-| `GREG_MAX_RESPONSE_TOKENS` | `300` | Keep responses short |
+| `GREG_MAX_RESPONSE_TOKENS` | `512` | Keep responses short |
 | `GREG_NIGHT_START` | `1` | Hour (24h) when Greg sleeps |
 | `GREG_NIGHT_END` | `8` | Hour when Greg wakes up |
 | `GREG_TIMEZONE` | `Europe/Moscow` | Timezone for night mode |
@@ -103,7 +104,8 @@ src/
     decision.py      # Decides when to respond
     emotions.py      # Tracks emotional state per person
     personality.py   # Assembles dynamic system prompts
-    responder.py     # Calls Claude Haiku API
+    responder.py     # Calls Claude API
+    searcher.py      # Web search via Tavily
   memory/
     short_term.py    # Redis — recent messages buffer
     long_term.py     # PostgreSQL — profiles, facts, emotions
@@ -112,27 +114,34 @@ src/
   utils/
     logging.py       # Structured JSON logging
     health.py        # Health endpoint
+    json_parser.py   # JSON response parsing
   main.py            # Wires everything together
 config/
   settings.py        # All configuration (from env vars)
   personality.py     # Greg's base personality prompt
-  topics.py          # Topic keywords, sentiment triggers
+  topics.py          # Greg's names/aliases
 ```
 
 ## Estimated cost
 
-~$11/month for a moderately active group (~500 messages/day) using Claude Haiku 4.5.
+~$50-60/month for a moderately active group (~1000 messages/day) using Claude Opus 4.6 for responses, Haiku 4.5 for decisions, and Tavily for web searches.
 
 ## Development
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
-pip install pytest pytest-asyncio
+pip install pytest pytest-asyncio ruff
 
-# Run tests
-pytest tests/ -v
+# Run tests (146 tests)
+python -m pytest tests/ -v
+
+# Lint
+ruff check .
+ruff format --check .
 ```
+
+CI runs automatically on push/PR to `main` via GitHub Actions (test, lint, typecheck).
 
 ## License
 
