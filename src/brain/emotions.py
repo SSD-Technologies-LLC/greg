@@ -3,7 +3,9 @@ import logging
 
 from anthropic import AsyncAnthropic
 
+from config.settings import settings
 from src.memory.long_term import LongTermMemory
+from src.utils.json_parser import safe_parse_json
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +56,7 @@ class EmotionTracker:
 
         try:
             response = await self._client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=settings.greg_decision_model,
                 max_tokens=256,
                 system=EMOTION_SYSTEM,
                 messages=[
@@ -70,13 +72,10 @@ class EmotionTracker:
                 ],
             )
             raw = response.content[0].text.strip()
-            # Extract JSON even if model wraps it in markdown or extra text
-            start = raw.find("{")
-            end = raw.rfind("}") + 1
-            if start == -1 or end == 0:
-                logger.warning("No JSON found in emotion response: %s", raw[:200])
+            data = safe_parse_json(raw)
+            if data is None:
+                logger.warning("No valid JSON in emotion response for user %d", user_id)
                 return current
-            data = json.loads(raw[start:end])
         except Exception:
             logger.exception("Emotion evaluation failed for user %d in chat %d", user_id, chat_id)
             return current
