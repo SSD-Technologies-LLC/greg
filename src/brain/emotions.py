@@ -69,7 +69,14 @@ class EmotionTracker:
                     }
                 ],
             )
-            data = json.loads(response.content[0].text)
+            raw = response.content[0].text.strip()
+            # Extract JSON even if model wraps it in markdown or extra text
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start == -1 or end == 0:
+                logger.warning("No JSON found in emotion response: %s", raw[:200])
+                return current
+            data = json.loads(raw[start:end])
         except Exception:
             logger.exception("Emotion evaluation failed for user %d in chat %d", user_id, chat_id)
             return current

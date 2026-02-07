@@ -48,9 +48,12 @@ class DecisionEngine:
         score += self._score_topics(text_lower)
         score += self._score_sentiment(text_lower)
         score += self._score_momentum(recent_messages)
+        score += self._newcomer_boost(recent_messages)
         score += random.uniform(0, self._random_factor)
         score -= self._cooldown_penalty(recent_messages)
         score -= self._night_penalty()
+
+        logger.debug("Score for chat %d: %.2f", chat_id, max(0.0, score))
 
         return max(0.0, score)
 
@@ -99,6 +102,12 @@ class DecisionEngine:
         )
         if not bot_in_recent:
             return 0.2
+        return 0.0
+
+    def _newcomer_boost(self, recent_messages: list[dict]) -> float:
+        """Boost score when Greg is new to a chat (few messages in buffer)."""
+        if len(recent_messages) < 15:
+            return 0.3
         return 0.0
 
     def _cooldown_penalty(self, recent_messages: list[dict]) -> float:
