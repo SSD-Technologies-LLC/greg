@@ -7,13 +7,15 @@ class Settings(BaseSettings):
     anthropic_api_key: str
     greg_bot_username: str
 
-    # Postgres
+    # Postgres — accepts DATABASE_URL directly (Railway) or builds from parts (Docker Compose)
+    database_url: str | None = None
     postgres_user: str = "greg"
-    postgres_password: str
+    postgres_password: str = ""
     postgres_db: str = "greg_brain"
 
-    # Redis
-    redis_password: str
+    # Redis — accepts REDIS_URL directly (Railway) or builds from parts (Docker Compose)
+    redis_url: str | None = None
+    redis_password: str = ""
 
     # Tuning
     greg_response_threshold: float = 0.4
@@ -33,10 +35,14 @@ class Settings(BaseSettings):
 
     @property
     def postgres_dsn(self) -> str:
+        if self.database_url:
+            return self.database_url
         return f"postgresql://{self.postgres_user}:{self.postgres_password}@postgres:5432/{self.postgres_db}"
 
     @property
-    def redis_url(self) -> str:
+    def redis_dsn(self) -> str:
+        if self.redis_url:
+            return self.redis_url
         return f"redis://:{self.redis_password}@redis:6379/0"
 
     model_config = {"env_file": ".env"}

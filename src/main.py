@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pathlib import Path
 
 import asyncpg
 from aiogram import Bot, Dispatcher
@@ -38,7 +39,14 @@ async def main() -> None:
     )
     logger.info("PostgreSQL connected")
 
-    redis = Redis.from_url(settings.redis_url, decode_responses=False)
+    # Auto-run migrations (Railway doesn't use docker-entrypoint-initdb.d)
+    migration = Path(__file__).resolve().parent.parent / "migrations" / "001_initial.sql"
+    if migration.exists():
+        async with pg_pool.acquire() as conn:
+            await conn.execute(migration.read_text())
+        logger.info("Migrations applied")
+
+    redis = Redis.from_url(settings.redis_dsn, decode_responses=False)
     await redis.ping()
     logger.info("Redis connected")
 
