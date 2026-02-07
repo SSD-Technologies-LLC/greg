@@ -20,9 +20,7 @@ class LongTermMemory:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def get_or_create_profile(
-        self, user_id: int, chat_id: int, display_name: str = ""
-    ) -> dict:
+    async def get_or_create_profile(self, user_id: int, chat_id: int, display_name: str = "") -> dict:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT * FROM user_profiles WHERE user_id = $1 AND chat_id = $2",
@@ -66,9 +64,7 @@ class LongTermMemory:
                 json.dumps(facts),
             )
 
-    async def update_personality_traits(
-        self, user_id: int, chat_id: int, traits: dict
-    ) -> None:
+    async def update_personality_traits(self, user_id: int, chat_id: int, traits: dict) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """UPDATE user_profiles
@@ -79,9 +75,7 @@ class LongTermMemory:
                 json.dumps(traits),
             )
 
-    async def update_emotional_state(
-        self, user_id: int, chat_id: int, deltas: dict[str, float]
-    ) -> dict:
+    async def update_emotional_state(self, user_id: int, chat_id: int, deltas: dict[str, float]) -> dict:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT emotional_state FROM user_profiles WHERE user_id = $1 AND chat_id = $2",
@@ -91,7 +85,11 @@ class LongTermMemory:
             if not row:
                 return DEFAULT_EMOTIONS.copy()
 
-            current = row["emotional_state"] if isinstance(row["emotional_state"], dict) else json.loads(row["emotional_state"])
+            current = (
+                row["emotional_state"]
+                if isinstance(row["emotional_state"], dict)
+                else json.loads(row["emotional_state"])
+            )
             for key, delta in deltas.items():
                 if key in current:
                     current[key] = max(-1.0, min(1.0, current[key] + delta))
@@ -120,18 +118,14 @@ class LongTermMemory:
 
     async def get_group_context(self, chat_id: int) -> dict:
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM group_context WHERE chat_id = $1", chat_id
-            )
+            row = await conn.fetchrow("SELECT * FROM group_context WHERE chat_id = $1", chat_id)
             if row:
                 return dict(row)
             await conn.execute(
                 "INSERT INTO group_context (chat_id) VALUES ($1) ON CONFLICT DO NOTHING",
                 chat_id,
             )
-            row = await conn.fetchrow(
-                "SELECT * FROM group_context WHERE chat_id = $1", chat_id
-            )
+            row = await conn.fetchrow("SELECT * FROM group_context WHERE chat_id = $1", chat_id)
             return dict(row)
 
     async def update_group_context(self, chat_id: int, **fields: Any) -> None:
@@ -146,9 +140,7 @@ class LongTermMemory:
                         json.dumps(fields[field]),
                     )
 
-    async def append_memory_log(
-        self, chat_id: int, user_id: int | None, memory_type: str, content: str
-    ) -> None:
+    async def append_memory_log(self, chat_id: int, user_id: int | None, memory_type: str, content: str) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO memory_log (chat_id, user_id, memory_type, content)
@@ -159,9 +151,7 @@ class LongTermMemory:
                 content,
             )
 
-    async def get_recent_memories(
-        self, chat_id: int, user_id: int | None = None, limit: int = 20
-    ) -> list[dict]:
+    async def get_recent_memories(self, chat_id: int, user_id: int | None = None, limit: int = 20) -> list[dict]:
         async with self._pool.acquire() as conn:
             if user_id:
                 rows = await conn.fetch(

@@ -1,5 +1,5 @@
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -47,7 +47,10 @@ async def test_get_recent_messages(stm, mock_redis):
 @pytest.mark.asyncio
 async def test_get_overflow_messages(stm, mock_redis):
     mock_redis.llen = AsyncMock(return_value=210)
-    msgs = [json.dumps({"user_id": 1, "username": "a", "text": f"msg{i}", "timestamp": "t", "chat_id": 1}).encode() for i in range(50)]
+    msgs = [
+        json.dumps({"user_id": 1, "username": "a", "text": f"msg{i}", "timestamp": "t", "chat_id": 1}).encode()
+        for i in range(50)
+    ]
     mock_redis.lrange = AsyncMock(return_value=msgs)
     result = await stm.get_overflow_messages(chat_id=1)
     assert len(result) == 50

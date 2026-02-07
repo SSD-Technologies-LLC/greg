@@ -1,12 +1,14 @@
 import asyncio
 import logging
 import random
+import re
 
 from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
 TYPING_SPEED = 12  # chars per second
+_SEPARATOR_RE = re.compile(r"\n\s*-{3,}\s*\n")
 
 
 class MessageSender:
@@ -14,7 +16,7 @@ class MessageSender:
         self._bot = bot
 
     async def send_response(self, chat_id: int, text: str, reply_to: int | None = None) -> None:
-        parts = [p.strip() for p in text.split("\n---\n") if p.strip()]
+        parts = [p.strip() for p in _SEPARATOR_RE.split(text) if p.strip()]
         if not parts:
             return
 

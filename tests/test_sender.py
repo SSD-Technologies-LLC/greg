@@ -1,10 +1,10 @@
 """Tests for MessageSender — typing animation and message splitting."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.bot.sender import MessageSender, TYPING_SPEED
+from src.bot.sender import MessageSender
 
 
 @pytest.fixture
@@ -21,14 +21,11 @@ def sender(mock_bot):
 
 
 class TestSendResponse:
-
     @pytest.mark.asyncio
     async def test_single_message(self, sender, mock_bot):
         with patch("src.bot.sender.asyncio.sleep", new_callable=AsyncMock):
             await sender.send_response(chat_id=1, text="Hello!")
-        mock_bot.send_message.assert_called_once_with(
-            chat_id=1, text="Hello!", reply_to_message_id=None
-        )
+        mock_bot.send_message.assert_called_once_with(chat_id=1, text="Hello!", reply_to_message_id=None)
 
     @pytest.mark.asyncio
     async def test_reply_to(self, sender, mock_bot):

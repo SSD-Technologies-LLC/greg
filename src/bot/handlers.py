@@ -11,6 +11,7 @@ from src.bot.sender import MessageSender
 from src.brain.decision import DecisionEngine
 from src.brain.emotions import EmotionTracker
 from src.brain.responder import Responder
+from src.brain.searcher import WebSearcher
 from src.memory.context_builder import ContextBuilder
 from src.memory.distiller import Distiller
 from src.memory.short_term import ShortTermMemory
@@ -30,6 +31,7 @@ class MessageHandler:
         context_builder: ContextBuilder,
         stm: ShortTermMemory,
         distiller: Distiller,
+        searcher: WebSearcher | None = None,
     ) -> None:
         self._sender = sender
         self._decision = decision_engine
@@ -38,11 +40,14 @@ class MessageHandler:
         self._context = context_builder
         self._stm = stm
         self._distiller = distiller
+        self._searcher = searcher
 
     async def handle_message(self, message: Message) -> None:
         if not message.from_user:
             return
-        if not (message.text or message.caption or message.photo or message.video or message.voice or message.video_note):
+        if not (
+            message.text or message.caption or message.photo or message.video or message.voice or message.video_note
+        ):
             return
 
         chat_id = message.chat.id
@@ -53,17 +58,13 @@ class MessageHandler:
 
         logger.info("Message from %s in chat %d: %s", username, chat_id, display_text[:80])
 
-        # Store in short-term memory (text description only)
         buffer_len = await self._stm.store_message(chat_id, user_id, username, display_text)
 
-        # Trigger distillation if buffer overflowing
         if buffer_len > settings.greg_redis_buffer_size:
             asyncio.create_task(self._safe_distill(chat_id))
 
-        # In private chats, always respond
         is_private = message.chat.type == "private"
 
-        # Check if Greg should respond
         is_reply_to_bot = (
             message.reply_to_message is not None
             and message.reply_to_message.from_user is not None
@@ -74,50 +75,52 @@ class MessageHandler:
         recent = await self._stm.get_recent_messages(chat_id, count=20)
 
         if is_private:
-            score = 1.0
+            should_respond = True
+            is_direct = True
+            search_needed = False
+            search_query = None
         else:
-            score = await self._decision.calculate_score(
+            result = await self._decision.evaluate(
                 chat_id=chat_id,
                 text=display_text,
                 is_reply_to_bot=is_reply_to_bot,
                 recent_messages=recent,
             )
+            should_respond = result.should_respond
+            is_direct = result.is_direct
+            search_needed = result.search_needed
+            search_query = result.search_query
 
-        is_direct = score >= 1.0
-        if not self._decision.should_respond(score, chat_id, is_direct):
+        if not should_respond:
             return
 
-        # Build context and generate response
+        # Web search if needed (run in thread to avoid blocking event loop)
+        search_context = None
+        if search_needed and search_query and self._searcher:
+            search_context = await asyncio.to_thread(self._searcher.search, search_query, settings.tavily_max_results)
+
         context = await self._context.build_context(chat_id, user_id, username)
         response = await self._responder.generate_response(
-            context, display_text, username, image_base64=image_base64
+            context,
+            display_text,
+            username,
+            image_base64=image_base64,
+            search_context=search_context,
         )
 
         if not response:
             return
 
-        # Send response
         reply_to = message.message_id if is_direct else None
         await self._sender.send_response(chat_id, response, reply_to=reply_to)
 
-        # Store Greg's response in short-term memory
-        await self._stm.store_message(
-            chat_id, 0, settings.greg_bot_username, response.replace("\n---\n", " ")
-        )
+        await self._stm.store_message(chat_id, 0, settings.greg_bot_username, response.replace("\n---\n", " "))
 
-        # Record for rate limiting
         self._decision.record_response(chat_id, is_direct)
 
-        # Evaluate emotional impact in background
-        asyncio.create_task(
-            self._safe_emotion_update(chat_id, user_id, username, display_text, response)
-        )
+        asyncio.create_task(self._safe_emotion_update(chat_id, user_id, username, display_text, response))
 
     async def _extract_media(self, message: Message) -> tuple[str, str | None]:
-        """Extract display text and optional base64 image from a message.
-
-        Returns (display_text, image_base64 | None).
-        """
         caption = message.text or message.caption or ""
         image_base64 = None
 
@@ -141,7 +144,6 @@ class MessageHandler:
         return display_text, image_base64
 
     async def _download_image(self, message: Message, file_id: str) -> str | None:
-        """Download a file by ID and return its base64 encoding."""
         try:
             buf = BytesIO()
             await message.bot.download(file_id, destination=buf)
@@ -156,12 +158,8 @@ class MessageHandler:
         except Exception:
             logger.exception("Background distillation failed for chat %d", chat_id)
 
-    async def _safe_emotion_update(
-        self, chat_id: int, user_id: int, username: str, text: str, response: str
-    ) -> None:
+    async def _safe_emotion_update(self, chat_id: int, user_id: int, username: str, text: str, response: str) -> None:
         try:
-            await self._emotions.evaluate_interaction(
-                chat_id, user_id, username, text, response
-            )
+            await self._emotions.evaluate_interaction(chat_id, user_id, username, text, response)
         except Exception:
             logger.exception("Background emotion update failed for user %d", user_id)

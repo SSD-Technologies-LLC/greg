@@ -1,7 +1,6 @@
 """Tests for Responder — Claude API integration and response generation."""
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -35,7 +34,6 @@ def _context():
 
 
 class TestGenerateResponse:
-
     @pytest.mark.asyncio
     async def test_basic_response(self, responder, mock_client):
         result = await responder.generate_response(_context(), "hello", "alice")
@@ -58,9 +56,7 @@ class TestGenerateResponse:
 
     @pytest.mark.asyncio
     async def test_image_forwarded_to_messages(self, responder, mock_client):
-        await responder.generate_response(
-            _context(), "[Фото] look", "alice", image_base64="AAAA"
-        )
+        await responder.generate_response(_context(), "[Фото] look", "alice", image_base64="AAAA")
         call_kwargs = mock_client.messages.create.call_args.kwargs
         messages = call_kwargs["messages"]
         # Last message should have multimodal content
@@ -99,7 +95,7 @@ class TestGenerateResponse:
     async def test_uses_correct_model(self, responder, mock_client):
         await responder.generate_response(_context(), "hello", "alice")
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
+        assert call_kwargs["model"] == "claude-opus-4-6"
 
     @pytest.mark.asyncio
     async def test_response_stripped(self, responder, mock_client):

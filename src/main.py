@@ -15,6 +15,7 @@ from src.bot.sender import MessageSender
 from src.brain.decision import DecisionEngine
 from src.brain.emotions import EmotionTracker
 from src.brain.responder import Responder
+from src.brain.searcher import WebSearcher
 from src.memory.context_builder import ContextBuilder
 from src.memory.distiller import Distiller
 from src.memory.long_term import LongTermMemory
@@ -59,9 +60,7 @@ async def main() -> None:
 
     decision_engine = DecisionEngine(
         bot_username=settings.greg_bot_username,
-        response_threshold=settings.greg_response_threshold,
-        random_factor=settings.greg_random_factor,
-        cooldown_messages=settings.greg_cooldown_messages,
+        anthropic_client=anthropic_client,
         max_unprompted_per_hour=settings.greg_max_unprompted_per_hour,
         night_start=settings.greg_night_start,
         night_end=settings.greg_night_end,
@@ -70,6 +69,21 @@ async def main() -> None:
 
     emotion_tracker = EmotionTracker(ltm=ltm, anthropic_client=anthropic_client)
     responder = Responder(anthropic_client=anthropic_client)
+
+    # Web search — optional, only if TAVILY_API_KEY is set
+    searcher = None
+    if settings.tavily_api_key:
+        try:
+            from tavily import TavilyClient
+
+            searcher = WebSearcher(tavily_client=TavilyClient(api_key=settings.tavily_api_key))
+            logger.info("Tavily search enabled")
+        except ImportError:
+            logger.warning("tavily-python not installed, search disabled")
+    else:
+        logger.info("TAVILY_API_KEY not set, search disabled")
+    if searcher is None:
+        searcher = WebSearcher(tavily_client=None)
 
     bot = Bot(
         token=settings.telegram_bot_token,
@@ -85,6 +99,7 @@ async def main() -> None:
         context_builder=context_builder,
         stm=stm,
         distiller=distiller,
+        searcher=searcher,
     )
 
     @router.message()
