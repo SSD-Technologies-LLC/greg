@@ -46,12 +46,17 @@ class MessageHandler:
         username = message.from_user.username or message.from_user.first_name or str(user_id)
         text = message.text
 
+        logger.info("Message from %s in chat %d: %s", username, chat_id, text[:80])
+
         # Store in short-term memory
         buffer_len = await self._stm.store_message(chat_id, user_id, username, text)
 
         # Trigger distillation if buffer overflowing
         if buffer_len > settings.greg_redis_buffer_size:
             asyncio.create_task(self._safe_distill(chat_id))
+
+        # In private chats, always respond
+        is_private = message.chat.type == "private"
 
         # Check if Greg should respond
         is_reply_to_bot = (
@@ -63,12 +68,15 @@ class MessageHandler:
 
         recent = await self._stm.get_recent_messages(chat_id, count=20)
 
-        score = await self._decision.calculate_score(
-            chat_id=chat_id,
-            text=text,
-            is_reply_to_bot=is_reply_to_bot,
-            recent_messages=recent,
-        )
+        if is_private:
+            score = 1.0
+        else:
+            score = await self._decision.calculate_score(
+                chat_id=chat_id,
+                text=text,
+                is_reply_to_bot=is_reply_to_bot,
+                recent_messages=recent,
+            )
 
         is_direct = score >= 1.0
         if not self._decision.should_respond(score, chat_id, is_direct):
