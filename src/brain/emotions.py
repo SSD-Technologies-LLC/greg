@@ -69,7 +69,7 @@ class EmotionTracker:
                     }
                 ],
             )
-            raw = response.content[0].text.strip()
+            raw = response.content[0].text.strip()  # type: ignore[union-attr]
             data = safe_parse_json(raw)
             if data is None:
                 logger.warning("No valid JSON in emotion response for user %d", user_id)

@@ -74,9 +74,9 @@ class Responder:
                 model=settings.greg_response_model,
                 max_tokens=settings.greg_max_response_tokens,
                 system=system_prompt,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
             )
-            text = response.content[0].text.strip()
+            text = response.content[0].text.strip()  # type: ignore[union-attr]
             text = sanitize_response(text)
             logger.info("Generated response (%d chars) for %s", len(text), current_username)
             return text if text else None

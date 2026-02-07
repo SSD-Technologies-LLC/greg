@@ -60,7 +60,7 @@ class Distiller:
                     system=DISTILL_SYSTEM,
                     messages=[{"role": "user", "content": DISTILL_PROMPT.format(messages=messages_text)}],
                 )
-                raw = response.content[0].text
+                raw = response.content[0].text  # type: ignore[union-attr]
                 data = safe_parse_json(raw)
                 if data is not None:
                     return data

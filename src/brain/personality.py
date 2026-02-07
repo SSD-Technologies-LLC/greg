@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 
 from config.personality import BASE_PERSONALITY, TONE_MODIFIERS
 
@@ -74,8 +75,8 @@ class PersonalityEngine:
         current_username: str,
         *,
         image_base64: str | None = None,
-    ) -> list[dict]:
-        messages = []
+    ) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
         recent = context.get("recent_messages", [])
 
         for msg in recent[-30:]:

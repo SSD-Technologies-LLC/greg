@@ -54,4 +54,4 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env"}
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]  # populated from env vars

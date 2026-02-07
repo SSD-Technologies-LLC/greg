@@ -146,6 +146,7 @@ class MessageHandler:
     async def _download_image(self, message: Message, file_id: str) -> str | None:
         try:
             buf = BytesIO()
+            assert message.bot is not None
             await message.bot.download(file_id, destination=buf)
             return base64.b64encode(buf.getvalue()).decode()
         except Exception:

@@ -1,15 +1,18 @@
 import json
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from redis.asyncio import Redis
 
 logger = logging.getLogger(__name__)
 
+_Redis = Redis  # alias to avoid mypy issues with redis.asyncio stubs
+
 
 class ShortTermMemory:
-    def __init__(self, redis: Redis, buffer_size: int = 200) -> None:
-        self._redis = redis
+    def __init__(self, redis: Any, buffer_size: int = 200) -> None:
+        self._redis: Any = redis
         self._buffer_size = buffer_size
 
     def _chat_key(self, chat_id: int) -> str:

@@ -105,7 +105,7 @@ class DecisionEngine:
                     }
                 ],
             )
-            raw = response.content[0].text
+            raw = response.content[0].text  # type: ignore[union-attr]
             data = safe_parse_json(raw)
             if data is None:
                 logger.warning("Invalid JSON from decision model for chat %d", chat_id)
