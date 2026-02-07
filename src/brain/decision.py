@@ -106,8 +106,8 @@ class DecisionEngine:
 
     def _newcomer_boost(self, recent_messages: list[dict]) -> float:
         """Boost score when Greg is new to a chat (few messages in buffer)."""
-        if len(recent_messages) < 15:
-            return 0.3
+        if len(recent_messages) < 20:
+            return 0.5
         return 0.0
 
     def _cooldown_penalty(self, recent_messages: list[dict]) -> float:
