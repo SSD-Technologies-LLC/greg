@@ -17,13 +17,19 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     redis_password: str = ""
 
+    # Models
+    greg_response_model: str = "claude-opus-4-6"
+    greg_decision_model: str = "claude-haiku-4-5-20251001"
+
+    # Search
+    tavily_api_key: str | None = None
+    tavily_max_results: int = 3
+
     # Tuning
-    greg_response_threshold: float = 0.25
-    greg_random_factor: float = 0.15
     greg_cooldown_messages: int = 3
     greg_max_unprompted_per_hour: int = 5
     greg_max_api_calls_per_hour: int = 60
-    greg_max_response_tokens: int = 300
+    greg_max_response_tokens: int = 512
     greg_night_start: int = 1
     greg_night_end: int = 8
     greg_timezone: str = "Europe/Moscow"
