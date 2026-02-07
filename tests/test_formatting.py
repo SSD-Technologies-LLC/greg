@@ -9,15 +9,16 @@ from src.brain.responder import sanitize_response
 
 
 class TestSanitizeResponse:
-    def test_strips_literal_separator(self):
+    def test_converts_literal_separator_to_actual(self):
         text = "Part 1\\n---\\nPart 2"
         result = sanitize_response(text)
         assert "\\n---\\n" not in result
+        assert "\n---\n" in result
 
-    def test_strips_dashes_separator(self):
+    def test_preserves_actual_separator_for_sender(self):
         text = "Part 1\n---\nPart 2"
         result = sanitize_response(text)
-        assert "\n---\n" not in result
+        assert "\n---\n" in result
 
     def test_strips_leaked_username_format(self):
         text = "Нормальный текст\n[alice]: leaked message\nещё текст"

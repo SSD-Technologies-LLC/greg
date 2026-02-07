@@ -20,11 +20,10 @@ def sanitize_response(text: str) -> str:
     if not text:
         return text
 
-    # Strip literal escaped separators
-    text = _LITERAL_SEP_RE.sub(" ", text)
+    # Convert literal escaped \n---\n to actual separators so sender can split
+    text = _LITERAL_SEP_RE.sub("\n---\n", text)
 
-    # Strip actual --- separators (will be handled by sender, but clean up remnants)
-    text = re.sub(r"\n\s*-{3,}\s*\n", " ", text)
+    # Actual --- separators are left for sender.py to split into separate messages
 
     # Strip leaked [username]: lines
     text = _LEAKED_FORMAT_RE.sub("", text)

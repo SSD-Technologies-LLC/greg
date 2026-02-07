@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # Tuning
     greg_cooldown_messages: int = 3
-    greg_max_unprompted_per_hour: int = 5
+    greg_max_unprompted_per_hour: int = 15
     greg_max_api_calls_per_hour: int = 60
     greg_max_response_tokens: int = 512
     greg_night_start: int = 1
