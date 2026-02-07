@@ -155,8 +155,13 @@ class PersonalityEngine:
 
         if interest > 0.5:
             modifiers.append(TONE_MODIFIERS["interest_high"])
+        elif interest < -0.4:
+            modifiers.append(TONE_MODIFIERS["bored"])
 
         if loyalty > 0.5:
             modifiers.append(TONE_MODIFIERS["loyalty_high"])
+
+        if warmth > 0.4 and trust > 0.4:
+            modifiers.append(TONE_MODIFIERS["trolling"])
 
         return modifiers
