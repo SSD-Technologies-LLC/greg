@@ -3,8 +3,10 @@ import logging
 
 from anthropic import AsyncAnthropic
 
+from config.settings import settings
 from src.memory.long_term import LongTermMemory
 from src.memory.short_term import ShortTermMemory
+from src.utils.json_parser import safe_parse_json
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,8 @@ DISTILL_PROMPT = """Проанализируй эти сообщения из г
 Сообщения:
 {messages}"""
 
+MAX_RETRIES = 2
+
 
 class Distiller:
     def __init__(
@@ -47,6 +51,30 @@ class Distiller:
         self._ltm = ltm
         self._client = anthropic_client
 
+    async def _call_with_retry(self, messages_text: str, chat_id: int) -> dict | None:
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = await self._client.messages.create(
+                    model=settings.greg_decision_model,
+                    max_tokens=1024,
+                    system=DISTILL_SYSTEM,
+                    messages=[{"role": "user", "content": DISTILL_PROMPT.format(messages=messages_text)}],
+                )
+                raw = response.content[0].text
+                data = safe_parse_json(raw)
+                if data is not None:
+                    return data
+                logger.warning(
+                    "Distillation attempt %d/%d returned unparseable JSON for chat %d",
+                    attempt + 1, MAX_RETRIES, chat_id,
+                )
+            except Exception:
+                logger.exception(
+                    "Distillation attempt %d/%d failed for chat %d",
+                    attempt + 1, MAX_RETRIES, chat_id,
+                )
+        return None
+
     async def distill(self, chat_id: int) -> bool:
         overflow = await self._stm.get_overflow_messages(chat_id)
         if not overflow:
@@ -58,17 +86,9 @@ class Distiller:
             f"[{m['username']}({m['user_id']})]: {m['text']}" for m in overflow
         )
 
-        try:
-            response = await self._client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1024,
-                system=DISTILL_SYSTEM,
-                messages=[{"role": "user", "content": DISTILL_PROMPT.format(messages=messages_text)}],
-            )
-            raw = response.content[0].text
-            data = json.loads(raw)
-        except Exception:
-            logger.exception("Distillation failed for chat %d", chat_id)
+        data = await self._call_with_retry(messages_text, chat_id)
+        if data is None:
+            logger.error("Distillation failed after %d retries for chat %d", MAX_RETRIES, chat_id)
             return False
 
         users = data.get("users", {})
