@@ -99,7 +99,7 @@ class TestGenerateResponse:
     async def test_uses_correct_model(self, responder, mock_client):
         await responder.generate_response(_context(), "hello", "alice")
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
+        assert call_kwargs["model"] == "claude-opus-4-6"
 
     @pytest.mark.asyncio
     async def test_response_stripped(self, responder, mock_client):

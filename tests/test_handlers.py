@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.bot.handlers import MessageHandler
+from src.brain.decision import DecisionResult
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ def _make_message(
 
 
 def _make_photo():
-    """Return a list of mock PhotoSize objects (smallest → largest)."""
+    """Return a list of mock PhotoSize objects (smallest -> largest)."""
     small = MagicMock()
     small.file_id = "photo_small"
     large = MagicMock()
@@ -94,8 +95,9 @@ def deps():
     """Shared mock dependencies for MessageHandler."""
     sender = AsyncMock()
     decision = MagicMock()
-    decision.calculate_score = AsyncMock(return_value=1.0)
-    decision.should_respond = MagicMock(return_value=True)
+    decision.evaluate = AsyncMock(return_value=DecisionResult(
+        should_respond=True, is_direct=True, search_needed=False, search_query=None,
+    ))
     decision.record_response = MagicMock()
 
     responder = AsyncMock()
@@ -120,12 +122,15 @@ def deps():
     distiller = AsyncMock()
     distiller.distill = AsyncMock(return_value=True)
 
-    return sender, decision, responder, emotions, ctx_builder, stm, distiller
+    searcher = MagicMock()
+    searcher.search = MagicMock(return_value=None)
+
+    return sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher
 
 
 @pytest.fixture
 def handler(deps):
-    sender, decision, responder, emotions, ctx_builder, stm, distiller = deps
+    sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher = deps
     return MessageHandler(
         sender=sender,
         decision_engine=decision,
@@ -134,6 +139,7 @@ def handler(deps):
         context_builder=ctx_builder,
         stm=stm,
         distiller=distiller,
+        searcher=searcher,
     )
 
 
@@ -171,7 +177,7 @@ class TestTextMessages:
 
     @pytest.mark.asyncio
     async def test_plain_text_stores_and_responds(self, handler, deps):
-        sender, decision, responder, emotions, ctx_builder, stm, distiller = deps
+        sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher = deps
         msg = _make_message(text="Привет всем")
         await handler.handle_message(msg)
 
@@ -183,10 +189,11 @@ class TestTextMessages:
         sender.send_response.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_decision_engine_low_score_skips_response(self, handler, deps):
+    async def test_decision_engine_no_respond_skips_response(self, handler, deps):
         sender, decision, responder, *_ = deps
-        decision.calculate_score = AsyncMock(return_value=0.1)
-        decision.should_respond = MagicMock(return_value=False)
+        decision.evaluate = AsyncMock(return_value=DecisionResult(
+            should_respond=False, is_direct=False,
+        ))
         msg = _make_message(text="random stuff")
         await handler.handle_message(msg)
         responder.generate_response.assert_not_called()
@@ -195,11 +202,10 @@ class TestTextMessages:
     @pytest.mark.asyncio
     async def test_private_chat_always_responds(self, handler, deps):
         sender, decision, responder, *_ = deps
-        decision.calculate_score = AsyncMock(return_value=0.0)  # would fail threshold
         msg = _make_message(text="hey", chat_type="private")
         await handler.handle_message(msg)
-        # In private chat score is forced to 1.0, bypasses calculate_score
-        decision.calculate_score.assert_not_called()
+        # In private chat, evaluate should NOT be called
+        decision.evaluate.assert_not_called()
         responder.generate_response.assert_called_once()
 
     @pytest.mark.asyncio
@@ -216,6 +222,7 @@ class TestTextMessages:
         with patch("src.bot.handlers.settings") as mock_settings:
             mock_settings.greg_bot_username = "greg_bot"
             mock_settings.greg_redis_buffer_size = 200
+            mock_settings.tavily_max_results = 3
             msg = _make_message(text="I disagree", reply_to_bot=True)
             await handler.handle_message(msg)
         # reply_to should be set (is_direct = True)
@@ -233,7 +240,7 @@ class TestPhotoMessages:
 
     @pytest.mark.asyncio
     async def test_photo_with_caption(self, handler, deps):
-        sender, decision, responder, emotions, ctx_builder, stm, distiller = deps
+        sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher = deps
         msg = _make_message(caption="Смотрите что нашёл", photo=_make_photo())
         await handler.handle_message(msg)
 
@@ -250,7 +257,7 @@ class TestPhotoMessages:
 
     @pytest.mark.asyncio
     async def test_photo_without_caption(self, handler, deps):
-        _, _, _, _, _, stm, _ = deps
+        _, _, _, _, _, stm, _, _ = deps
         msg = _make_message(photo=_make_photo())
         await handler.handle_message(msg)
 
@@ -275,7 +282,7 @@ class TestVideoMessages:
 
     @pytest.mark.asyncio
     async def test_video_with_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _ = deps
+        _, _, responder, _, _, stm, _, _ = deps
         msg = _make_message(caption="Классное видео", video=_make_video())
         await handler.handle_message(msg)
 
@@ -287,7 +294,7 @@ class TestVideoMessages:
 
     @pytest.mark.asyncio
     async def test_video_without_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _ = deps
+        _, _, responder, _, _, stm, _, _ = deps
         msg = _make_message(video=_make_video(with_thumbnail=False))
         await handler.handle_message(msg)
 
@@ -306,7 +313,7 @@ class TestVideoNoteMessages:
 
     @pytest.mark.asyncio
     async def test_video_note_with_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _ = deps
+        _, _, responder, _, _, stm, _, _ = deps
         msg = _make_message(video_note=_make_video_note())
         await handler.handle_message(msg)
 
@@ -318,7 +325,7 @@ class TestVideoNoteMessages:
 
     @pytest.mark.asyncio
     async def test_video_note_without_thumbnail(self, handler, deps):
-        _, _, responder, _, _, stm, _ = deps
+        _, _, responder, _, _, stm, _, _ = deps
         msg = _make_message(video_note=_make_video_note(with_thumbnail=False))
         await handler.handle_message(msg)
 
@@ -337,7 +344,7 @@ class TestVoiceMessages:
 
     @pytest.mark.asyncio
     async def test_voice_message(self, handler, deps):
-        _, _, responder, _, _, stm, _ = deps
+        _, _, responder, _, _, stm, _, _ = deps
         msg = _make_message(voice=_make_voice())
         await handler.handle_message(msg)
 
@@ -357,7 +364,7 @@ class TestDownloadFailure:
 
     @pytest.mark.asyncio
     async def test_photo_download_failure_still_processes(self, handler, deps):
-        _, _, responder, _, _, stm, _ = deps
+        _, _, responder, _, _, stm, _, _ = deps
         msg = _make_message(caption="Look!", photo=_make_photo())
         msg.bot.download = AsyncMock(side_effect=Exception("Network error"))
         await handler.handle_message(msg)
@@ -379,7 +386,7 @@ class TestDistillation:
 
     @pytest.mark.asyncio
     async def test_distillation_triggered_on_overflow(self, handler, deps):
-        _, _, _, _, _, stm, distiller = deps
+        _, _, _, _, _, stm, distiller, _ = deps
         stm.store_message = AsyncMock(return_value=250)  # > buffer_size (200)
         msg = _make_message(text="one more message")
 
@@ -387,6 +394,7 @@ class TestDistillation:
             mock_settings.greg_bot_username = "greg_bot"
             mock_settings.greg_redis_buffer_size = 200
             mock_settings.greg_max_response_tokens = 300
+            mock_settings.tavily_max_results = 3
             await handler.handle_message(msg)
 
         # Give asyncio.create_task a chance to run
@@ -402,7 +410,7 @@ class TestResponseStorage:
 
     @pytest.mark.asyncio
     async def test_gregs_response_stored_in_stm(self, handler, deps):
-        sender, _, responder, _, _, stm, _ = deps
+        sender, _, responder, _, _, stm, _, _ = deps
         responder.generate_response = AsyncMock(return_value="Ответ Грега")
         msg = _make_message(text="hey")
 
@@ -410,6 +418,7 @@ class TestResponseStorage:
             mock_settings.greg_bot_username = "greg_bot"
             mock_settings.greg_redis_buffer_size = 200
             mock_settings.greg_max_response_tokens = 300
+            mock_settings.tavily_max_results = 3
             await handler.handle_message(msg)
 
         # Second call to store_message should be Greg's response
@@ -422,7 +431,7 @@ class TestResponseStorage:
 
     @pytest.mark.asyncio
     async def test_response_separator_stripped(self, handler, deps):
-        _, _, responder, _, _, stm, _ = deps
+        _, _, responder, _, _, stm, _, _ = deps
         responder.generate_response = AsyncMock(return_value="Часть 1\n---\nЧасть 2")
         msg = _make_message(text="hey")
 
@@ -430,6 +439,7 @@ class TestResponseStorage:
             mock_settings.greg_bot_username = "greg_bot"
             mock_settings.greg_redis_buffer_size = 200
             mock_settings.greg_max_response_tokens = 300
+            mock_settings.tavily_max_results = 3
             await handler.handle_message(msg)
 
         greg_call = stm.store_message.call_args_list[1]
@@ -437,3 +447,37 @@ class TestResponseStorage:
         assert "\n---\n" not in stored_text
         assert "Часть 1" in stored_text
         assert "Часть 2" in stored_text
+
+
+# ---------------------------------------------------------------------------
+# Search integration
+# ---------------------------------------------------------------------------
+
+class TestSearchIntegration:
+
+    @pytest.mark.asyncio
+    async def test_search_triggered_when_needed(self, handler, deps):
+        sender, decision, responder, _, _, _, _, searcher = deps
+        decision.evaluate = AsyncMock(return_value=DecisionResult(
+            should_respond=True, is_direct=False,
+            search_needed=True, search_query="weather moscow",
+        ))
+        searcher.search = MagicMock(return_value="Moscow: 5°C, cloudy")
+
+        msg = _make_message(text="what's the weather in Moscow?")
+        with patch("src.bot.handlers.settings") as mock_settings:
+            mock_settings.greg_bot_username = "greg_bot"
+            mock_settings.greg_redis_buffer_size = 200
+            mock_settings.tavily_max_results = 3
+            await handler.handle_message(msg)
+
+        searcher.search.assert_called_once_with("weather moscow", max_results=3)
+        call_kwargs = responder.generate_response.call_args.kwargs
+        assert call_kwargs["search_context"] == "Moscow: 5°C, cloudy"
+
+    @pytest.mark.asyncio
+    async def test_no_search_when_not_needed(self, handler, deps):
+        _, _, _, _, _, _, _, searcher = deps
+        msg = _make_message(text="hey")
+        await handler.handle_message(msg)
+        searcher.search.assert_not_called()
