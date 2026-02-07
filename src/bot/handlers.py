@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import logging
+from io import BytesIO
 
 from aiogram import Router
 from aiogram.types import Message
@@ -38,18 +40,21 @@ class MessageHandler:
         self._distiller = distiller
 
     async def handle_message(self, message: Message) -> None:
-        if not message.text or not message.from_user:
+        if not message.from_user:
+            return
+        if not (message.text or message.caption or message.photo or message.video or message.voice or message.video_note):
             return
 
         chat_id = message.chat.id
         user_id = message.from_user.id
         username = message.from_user.username or message.from_user.first_name or str(user_id)
-        text = message.text
 
-        logger.info("Message from %s in chat %d: %s", username, chat_id, text[:80])
+        display_text, image_base64 = await self._extract_media(message)
 
-        # Store in short-term memory
-        buffer_len = await self._stm.store_message(chat_id, user_id, username, text)
+        logger.info("Message from %s in chat %d: %s", username, chat_id, display_text[:80])
+
+        # Store in short-term memory (text description only)
+        buffer_len = await self._stm.store_message(chat_id, user_id, username, display_text)
 
         # Trigger distillation if buffer overflowing
         if buffer_len > settings.greg_redis_buffer_size:
@@ -73,7 +78,7 @@ class MessageHandler:
         else:
             score = await self._decision.calculate_score(
                 chat_id=chat_id,
-                text=text,
+                text=display_text,
                 is_reply_to_bot=is_reply_to_bot,
                 recent_messages=recent,
             )
@@ -84,7 +89,9 @@ class MessageHandler:
 
         # Build context and generate response
         context = await self._context.build_context(chat_id, user_id, username)
-        response = await self._responder.generate_response(context, text, username)
+        response = await self._responder.generate_response(
+            context, display_text, username, image_base64=image_base64
+        )
 
         if not response:
             return
@@ -103,8 +110,45 @@ class MessageHandler:
 
         # Evaluate emotional impact in background
         asyncio.create_task(
-            self._safe_emotion_update(chat_id, user_id, username, text, response)
+            self._safe_emotion_update(chat_id, user_id, username, display_text, response)
         )
+
+    async def _extract_media(self, message: Message) -> tuple[str, str | None]:
+        """Extract display text and optional base64 image from a message.
+
+        Returns (display_text, image_base64 | None).
+        """
+        caption = message.text or message.caption or ""
+        image_base64 = None
+
+        if message.photo:
+            label = "[Фото]"
+            image_base64 = await self._download_image(message, message.photo[-1].file_id)
+        elif message.video:
+            label = "[Видео]"
+            if message.video.thumbnail:
+                image_base64 = await self._download_image(message, message.video.thumbnail.file_id)
+        elif message.video_note:
+            label = "[Видеосообщение]"
+            if message.video_note.thumbnail:
+                image_base64 = await self._download_image(message, message.video_note.thumbnail.file_id)
+        elif message.voice:
+            label = "[Голосовое сообщение]"
+        else:
+            return caption, None
+
+        display_text = f"{label} {caption}".strip() if caption else label
+        return display_text, image_base64
+
+    async def _download_image(self, message: Message, file_id: str) -> str | None:
+        """Download a file by ID and return its base64 encoding."""
+        try:
+            buf = BytesIO()
+            await message.bot.download(file_id, destination=buf)
+            return base64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            logger.exception("Failed to download file %s", file_id)
+            return None
 
     async def _safe_distill(self, chat_id: int) -> None:
         try:

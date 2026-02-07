@@ -14,10 +14,13 @@ class Responder:
         self._personality = PersonalityEngine()
 
     async def generate_response(
-        self, context: dict, current_text: str, current_username: str
+        self, context: dict, current_text: str, current_username: str,
+        *, image_base64: str | None = None,
     ) -> str | None:
         system_prompt = self._personality.build_system_prompt(context)
-        messages = self._personality.build_messages(context, current_text, current_username)
+        messages = self._personality.build_messages(
+            context, current_text, current_username, image_base64=image_base64
+        )
 
         if not messages:
             return None
