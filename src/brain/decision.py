@@ -84,13 +84,11 @@ class DecisionEngine:
         for category, keywords in SENTIMENT_KEYWORDS.items():
             for kw in keywords:
                 if kw in text:
-                    if category == "vulnerable":
-                        return 0.4
+                    if category in ("vulnerable", "positive_strong"):
+                        return 0.6
                     if category in ("negative_strong", "conflict"):
-                        return 0.3
-                    if category == "positive_strong":
-                        return 0.2
-                    return 0.1
+                        return 0.5
+                    return 0.2
         return 0.0
 
     def _score_momentum(self, recent_messages: list[dict]) -> float:
