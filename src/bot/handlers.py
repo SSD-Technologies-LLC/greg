@@ -92,10 +92,12 @@ class MessageHandler:
         if not should_respond:
             return
 
-        # Web search if needed
+        # Web search if needed (run in thread to avoid blocking event loop)
         search_context = None
         if search_needed and search_query and self._searcher:
-            search_context = self._searcher.search(search_query, max_results=settings.tavily_max_results)
+            search_context = await asyncio.to_thread(
+                self._searcher.search, search_query, settings.tavily_max_results
+            )
 
         context = await self._context.build_context(chat_id, user_id, username)
         response = await self._responder.generate_response(

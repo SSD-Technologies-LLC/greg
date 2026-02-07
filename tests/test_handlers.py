@@ -471,7 +471,7 @@ class TestSearchIntegration:
             mock_settings.tavily_max_results = 3
             await handler.handle_message(msg)
 
-        searcher.search.assert_called_once_with("weather moscow", max_results=3)
+        searcher.search.assert_called_once_with("weather moscow", 3)
         call_kwargs = responder.generate_response.call_args.kwargs
         assert call_kwargs["search_context"] == "Moscow: 5°C, cloudy"
 
