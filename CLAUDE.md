@@ -45,6 +45,12 @@ Greg (Гриша) — Telegram group chat bot. See `context.md` for full archite
 - Tavily search is synchronous — always call via `asyncio.to_thread()` to avoid blocking the event loop.
 - Search is optional — code must work when `TAVILY_API_KEY` is unset. `WebSearcher(tavily_client=None)` returns `None` for all queries.
 
+### Voice Transcription
+- Voice transcription uses OpenAI Whisper API (`whisper-1`, `language="ru"`) via `VoiceTranscriber`.
+- Transcription is optional — code must work when `OPENAI_API_KEY` is unset. `VoiceTranscriber(client=None)` returns `None`.
+- Transcription is internal only — users see Greg's natural response, not the transcript.
+- Follows the same optional-dependency pattern as Tavily search.
+
 ### Personality
 - Greg has no topic refusals. He discusses everything. Don't add content filters.
 - Tone modifiers are driven by emotional state, not hardcoded triggers.
@@ -69,7 +75,7 @@ Greg (Гриша) — Telegram group chat bot. See `context.md` for full archite
   ```
 - **Mock Anthropic:** `AsyncMock()` client, mock `response.content[0].text`
 - **Mock decision engine:** `decision.evaluate = AsyncMock(return_value=DecisionResult(...))` — not the old `calculate_score`
-- **Handler deps fixture:** 8-tuple: `(sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher)`
+- **Handler deps fixture:** 9-tuple: `(sender, decision, responder, emotions, ctx_builder, stm, distiller, searcher, transcriber)`
 - **Environment:** `tests/conftest.py` sets `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `GREG_BOT_USERNAME`, `GREG_RESPONSE_MODEL`, `GREG_DECISION_MODEL` before any source imports
 - **No real external services** — all tests are fully mocked
 - Use class-based test grouping (`class TestFeatureName:`)
@@ -91,6 +97,7 @@ Greg (Гриша) — Telegram group chat bot. See `context.md` for full archite
 - **Change emotion evaluation:** `src/brain/emotions.py` (`EMOTION_PROMPT`)
 - **Change response/decision model:** `config/settings.py` (`greg_response_model`, `greg_decision_model`) or env vars
 - **Change search behavior:** `src/brain/searcher.py`, `src/bot/handlers.py` (search wiring)
+- **Change voice transcription:** `src/brain/transcriber.py`, `src/bot/handlers.py` (`_transcribe_voice`)
 - **Fix output formatting:** `src/brain/responder.py` (`sanitize_response`), `src/bot/sender.py` (`_SEPARATOR_RE`)
 - **Add DB fields:** `migrations/` + `src/memory/long_term.py`
 - **Add tests:** `tests/` — follow existing mock patterns, use class-based grouping

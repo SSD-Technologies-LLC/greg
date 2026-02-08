@@ -29,6 +29,8 @@ These aren't just numbers — they change Greg's behavior. High warmth means war
 
 When someone mentions him or replies to him — he always responds.
 
+**Voice understanding** — Greg transcribes voice messages via OpenAI Whisper and responds naturally, as if he listened to them. No transcription is shown to users — he just "hears" what was said.
+
 **Web search** — Greg can search the web via Tavily when he needs current information to give a meaningful answer.
 
 ## Personality
@@ -42,6 +44,7 @@ Greg is a **wise trickster**: sharp wit, philosophical depth, strong opinions on
 - Docker and Docker Compose
 - [Telegram Bot Token](https://core.telegram.org/bots#botfather) (from @BotFather)
 - [Anthropic API Key](https://console.anthropic.com/)
+- (Optional) [OpenAI API Key](https://platform.openai.com/) for voice message transcription
 - (Optional) [Tavily API Key](https://tavily.com/) for web search
 
 **Important:** In BotFather, disable privacy mode for your bot (`/setprivacy` -> Disable) so Greg can receive all group messages, not just commands and mentions.
@@ -78,10 +81,11 @@ Then add the bot to your Telegram group chat and start talking.
 |---|---|---|
 | `GREG_RESPONSE_MODEL` | `claude-opus-4-6` | Model for generating responses |
 | `GREG_DECISION_MODEL` | `claude-haiku-4-5-20251001` | Model for decision-making |
+| `OPENAI_API_KEY` | — | OpenAI API key for voice transcription (optional) |
 | `TAVILY_API_KEY` | — | Tavily API key for web search (optional) |
 | `TAVILY_MAX_RESULTS` | `3` | Max search results per query |
 | `GREG_COOLDOWN_MESSAGES` | `3` | Stay quiet for N messages after speaking |
-| `GREG_MAX_UNPROMPTED_PER_HOUR` | `5` | Anti-spam: max unprompted messages per hour |
+| `GREG_MAX_UNPROMPTED_PER_HOUR` | `15` | Anti-spam: max unprompted messages per hour |
 | `GREG_MAX_API_CALLS_PER_HOUR` | `60` | Cost control |
 | `GREG_MAX_RESPONSE_TOKENS` | `512` | Keep responses short |
 | `GREG_NIGHT_START` | `1` | Hour (24h) when Greg sleeps |
@@ -106,6 +110,7 @@ src/
     personality.py   # Assembles dynamic system prompts
     responder.py     # Calls Claude API
     searcher.py      # Web search via Tavily
+    transcriber.py   # Voice transcription via Whisper
   memory/
     short_term.py    # Redis — recent messages buffer
     long_term.py     # PostgreSQL — profiles, facts, emotions
@@ -133,7 +138,7 @@ config/
 pip install -r requirements.txt
 pip install pytest pytest-asyncio ruff
 
-# Run tests (146 tests)
+# Run tests (154 tests)
 python -m pytest tests/ -v
 
 # Lint

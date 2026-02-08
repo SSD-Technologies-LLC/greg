@@ -9,6 +9,7 @@ Greg (Гриша/Григорий) is a Telegram group chat bot. He acts as a re
 - **AI:** Anthropic SDK (AsyncAnthropic) — Opus 4.6 for responses, Haiku 4.5 for decisions/distillation/emotions
 - **Storage:** asyncpg (PostgreSQL) + redis.asyncio (Redis)
 - **Search:** Tavily API (optional, for real-time web search)
+- **Voice:** OpenAI Whisper API (optional, for voice message transcription)
 - **Config:** pydantic-settings (BaseSettings with `.env` file)
 - **CI:** GitHub Actions (pytest + ruff + mypy)
 
@@ -51,8 +52,11 @@ Tone modifiers activate based on emotional state:
 - Removes leaked `[username]:` format lines
 - Trims truncated responses to last complete sentence
 
+### Voice Transcription (Whisper)
+Voice messages are transcribed via OpenAI Whisper API (`whisper-1`, `language="ru"`). Transcription is internal — users see Greg's natural reply, not the transcript. The transcribed text is embedded in `display_text` as `[Голосовое сообщение] transcribed text`, flowing through the standard pipeline. Optional dependency: gracefully degrades to `[Голосовое сообщение]` label if `OPENAI_API_KEY` is unset or Whisper is down.
+
 ### Media Support
-Processes photos (full image via vision), videos (thumbnail), video notes/circles (thumbnail), and voice messages (text label only). Images are base64-encoded and sent as multimodal content blocks. Redis history stores text descriptions with Russian labels: `[Фото]`, `[Видео]`, `[Видеосообщение]`, `[Голосовое сообщение]`.
+Processes photos (full image via vision), videos (thumbnail), video notes/circles (thumbnail), and voice messages (transcribed via Whisper if available, otherwise text label). Images are base64-encoded and sent as multimodal content blocks. Redis history stores text descriptions with Russian labels: `[Фото]`, `[Видео]`, `[Видеосообщение]`, `[Голосовое сообщение]`.
 
 ### Message Sending
 Responses simulate natural typing speed (12 chars/sec, max 5s delay). Multi-part responses split on `---` separator patterns (regex-based, handles whitespace/length variants) are sent as separate messages with pauses.
@@ -75,6 +79,7 @@ src/
     emotions.py        # EmotionTracker — Haiku-evaluated emotional deltas with JSON retry
     responder.py       # Responder — builds prompt, calls Opus API, sanitizes output
     searcher.py        # WebSearcher — Tavily search wrapper with graceful degradation
+    transcriber.py     # VoiceTranscriber — Whisper transcription with graceful degradation
     personality.py     # PersonalityEngine — system prompt + message list construction
   memory/
     short_term.py      # ShortTermMemory — Redis buffer operations
@@ -86,7 +91,7 @@ src/
     health.py          # /health HTTP endpoint
     logging.py         # JSON structured logging
 
-tests/                 # 146 tests, mock-based (no real DB/Redis/API needed)
+tests/                 # 154 tests, mock-based (no real DB/Redis/API needed)
   conftest.py          # Sets test env vars before source imports
   test_handlers.py     # 20 tests: guards, text, media, distill, storage, search integration
   test_personality.py  # 18 tests: messages, system prompt, tone modifiers, trolling logic
@@ -134,6 +139,7 @@ migrations/
 - Emotions stored as JSONB, may be dict or JSON string — code handles both.
 - All JSON parsing from model output uses `safe_parse_json()` with retry on failure.
 - Tavily search is synchronous — wrapped in `asyncio.to_thread()` in handlers to avoid blocking.
+- Voice transcription via OpenAI Whisper is optional — `VoiceTranscriber(client=None)` returns `None` for all calls.
 
 ## Deployment
 ```bash
@@ -145,7 +151,7 @@ On Railway: migrations auto-run in `src/main.py` on startup.
 
 ## Testing
 ```bash
-python -m pytest tests/ -v  # 146 tests, ~3 seconds, no external deps needed
+python -m pytest tests/ -v  # 154 tests, ~3 seconds, no external deps needed
 ruff check .                # Lint
 ruff format --check .       # Format check
 ```
